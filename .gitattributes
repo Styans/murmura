@@ -1,0 +1,4 @@
+* text=auto eol=lf
+*.skyc binary
+*.png binary
+*.pdf binary

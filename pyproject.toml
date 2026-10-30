@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "murmura"
+version = "0.1.0"
+description = "Open drone show choreography engine: formations, collision-aware transitions, LED programs and .skyc export, with a Blender-plugin compatible planning server."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["drone", "drone-show", "swarm", "skyc", "trajectory", "choreography", "blender", "led"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Multimedia :: Graphics :: 3D Modeling",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+server = ["fastapi>=0.110", "uvicorn>=0.27"]
+plot = ["matplotlib>=3.7"]
+image = ["pillow>=10.0"]
+all = ["murmura[server,plot,image]"]
+dev = ["murmura[all]", "pytest>=8.0", "httpx>=0.27", "ruff>=0.5"]
+
+[project.scripts]
+murmura = "murmura.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Styans/murmura"
+Issues = "https://github.com/Styans/murmura/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/murmura"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501", "B905"]

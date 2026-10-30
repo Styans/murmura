@@ -1,0 +1,40 @@
+title: Hello sky
+drones: 36
+
+limits:
+  max_velocity_xy: 6
+  max_velocity_z: 2.5
+  max_velocity_z_up: 2
+  max_acceleration: 3
+  min_distance: 2
+  max_altitude: 120
+
+home:
+  grid: {spacing: 3, columns: 6}
+
+auto_scale: true
+
+takeoff:
+  altitude: 6
+  color: "#303030"
+
+scenes:
+  - name: Ring
+    formation: {shape: circle, radius: 14, center: [0, 0, 25]}
+    hold: 8
+    lights: {effect: rainbow, period: 4}
+    motion: {kind: rotate, rpm: 2}
+
+  - name: Heart
+    formation: {shape: heart, size: 26, center: [0, 0, 28]}
+    hold: 6
+    lights: {effect: pulse, color: "#ff1744", period: 1.5, min: 0.3}
+
+  - name: Ball
+    formation: {shape: sphere, radius: 7, center: [0, 0, 26]}
+    hold: 8
+    lights: {effect: wave, colors: ["#00e5ff", "#651fff"], axis: z, speed: 4}
+
+landing:
+  velocity: 1.2
+  spindown: 3

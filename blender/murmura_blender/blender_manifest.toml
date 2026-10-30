@@ -1,0 +1,18 @@
+schema_version = "1.0.0"
+
+id = "murmura"
+version = "0.1.0"
+name = "Murmura"
+tagline = "Drone show choreography and .skyc export"
+maintainer = "Murmura contributors"
+type = "add-on"
+website = "https://github.com/Styans/murmura"
+tags = ["Animation", "Import-Export", "Object"]
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:MIT"]
+
+[permissions]
+files = "Read and write drone show files (.skyc, .zip, .svg, images)"
+network = "Send shows to a show viewer running on this computer"
