@@ -60,6 +60,16 @@ same plan backwards: the lowest layer lands first, neighbours touch down
 *Spin-down* seconds apart. A pad that already respects the minimum distance
 takes off all at once.
 
+**Re-form into homes (default return).** The whole swarm re-forms in the
+air into its home grid - a point above every landing spot - with every drone
+moving at once along a straight line, then lands row by row. Drones get the
+home points that minimise the sum of squared distances; with such an
+assignment synchronised straight moves never bring two drones closer than
+the start and end spacing divided by sqrt(2) (the CAPT result), so the home
+grid uses sqrt(2) times the minimum distance (4 rows on a 1.5 m pad) and a
+denser formation first breathes out, scaled up about its base. No paths
+cross, nobody waits for a turn, and planning takes a fraction of a second.
+
 **Rows and petals.** Landing goes row by row: a row starts descending only
 when the previous one has touched down (plus *Spin-down*). *Rows* under
 *More Options* asks for at least 2 (checkerboard) or 4 rows. The *Sakura

@@ -62,6 +62,7 @@ RU: dict[str, str] = {
     "takeoff in {count} waves, layers {gap:.1f} m apart": "взлёт в {count} волны (по очереди), слои через {gap:.1f} м",
     "landing in {count} waves": "посадка в {count} волны (по очереди)",
     "return: petals are not possible here, drones fly straight home": "возврат: «лепестки» здесь невозможны, дроны летят прямо домой",
+    "return: the swarm re-forms into its home grid in the air ({count} rows) and keeps {clearance:.2f} m": "возврат: рой перестраивается в воздухе в «дома» (рядов: {count}) и держит {clearance:.2f} м",
     "return like falling petals: {delayed} drones peel off one by one, {swaying} sway": "возврат «лепестками»: {delayed} дронов отрываются от фигуры по очереди, {swaying} покачиваются",
     "return: drones land on the nearest free spots, their own were not safe": "возврат: дроны сядут на ближайшие свободные места - на свои вернуться безопасно не получилось",
     "{label}: requested {requested:.2f}s is too short, using {used:.2f}s": "{label}: запрошенные {requested:.2f} с - слишком мало, используется {used:.2f} с",

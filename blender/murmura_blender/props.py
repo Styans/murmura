@@ -99,6 +99,12 @@ ROWS = [
 
 RETURN_STYLES = [
     (
+        "morph",
+        "Re-form into homes",
+        "The whole swarm smoothly re-forms in the air into its home grid above the pad, "
+        "every drone at once and without crossing, then lands row by row",
+    ),
+    (
         "petals",
         "Sakura petals",
         "Drones peel off the formation one by one and drift home swaying, like falling petals",
@@ -225,7 +231,7 @@ class MURMURA_StoryboardEntry(bpy.types.PropertyGroup):
         items=ROWS,
         default="0",
     )
-    return_style: EnumProperty(name="Return", items=RETURN_STYLES, default="petals")
+    return_style: EnumProperty(name="Return", items=RETURN_STYLES, default="morph")
     petal_order: EnumProperty(name="Petals fall", items=PETAL_ORDERS, default="top")
     petal_interval: FloatProperty(
         name="Petal interval",

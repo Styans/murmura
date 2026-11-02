@@ -145,7 +145,7 @@ def test_drones_return_to_their_own_takeoff_points():
     b.takeoff(altitude=6, climb_velocity=1.2)
     hover = b.positions.copy()
     b.scene("Wall", circle(36, radius=14, center=(0, 30, 25)), hold=2)
-    b.land()
+    b.land(style="direct")
     show = b.build()
     assert validate_show(show).passed
     land0, _ = show.segments["landing"]
@@ -173,7 +173,7 @@ def test_landing_rows_follow_one_another():
     b = ShowBuilder(36, limits=limits, grid_spacing=1.5)
     b.takeoff(altitude=6, climb_velocity=1.2)
     b.scene("Ring", circle(36, radius=14, center=(0, 30, 25)), hold=2)
-    b.land(spindown=2.0)
+    b.land(style="direct", spindown=2.0)
     show = b.build()
     assert validate_show(show).passed
     touch = np.round(_touchdowns(show, show.segments["landing"][0]), 1)
@@ -213,3 +213,27 @@ def test_petal_return_is_safe_and_lands_on_own_spots():
     assert report.passed, report.summary()
     end = np.array([d.trajectory.last_position for d in show.drones])
     assert np.allclose(end, b.home)
+
+
+def test_morph_return_reforms_the_swarm_above_the_pad_and_lands_in_rows():
+    limits = SafetyLimits(min_distance=2)
+    b = ShowBuilder(36, limits=limits, grid_spacing=1.5)
+    b.takeoff(altitude=6, climb_velocity=1.2)
+    b.scene("Ring", circle(36, radius=14, center=(0, 30, 25)), hold=2)  # 2.44 m: breathes out
+    land0 = b.t
+    b.land(spindown=2.0)
+    show = b.build()
+    assert any("re-forms" in note for note in b.log)
+    assert any("4 waves" in note for note in b.log)
+    end = np.array([d.trajectory.last_position for d in show.drones])
+    # every pad spot gets exactly one drone
+    assert len({tuple(np.round(p, 3)) for p in end}) == 36
+    assert {tuple(np.round(p, 3)) for p in end} == {tuple(np.round(p, 3)) for p in b.home}
+    # nobody comes closer than the minimum while breathing out and re-forming
+    times = np.linspace(land0, show.end_time, 3000)
+    pos = np.stack([d.trajectory.position_at(times) for d in show.drones], axis=1)
+    for frame in pos[::5]:
+        up = frame[frame[:, 2] >= limits.min_nav_altitude]
+        if len(up) > 1:
+            dist = np.linalg.norm(up[:, None] - up[None], axis=2) + np.eye(len(up)) * 9
+            assert dist.min() >= 2 - 1e-3

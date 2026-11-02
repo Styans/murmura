@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 
+from ._compat import KDTree
 from .colors import parse_color
 from .effects import Effect, FormationColors, Solid, make_effect
 from .i18n import plan_label
@@ -21,6 +22,7 @@ from .planning import (
     plan_waves,
     takeoff_layers,
 )
+from .planning.matching import synchronized_clearance
 from .planning.transition import MovePlan, plan_safe_moves, synchronised_plan
 from .trajectory import Trajectory
 
@@ -754,7 +756,7 @@ class ShowBuilder:
         staging_spread: float | None = None,
         rows: int = 0,
         sequential: bool = True,
-        style: str = "direct",
+        style: str = "morph",
         petal_order: str = "top",
         petal_interval: float = 0.15,
         sway: float = 1.5,
@@ -778,17 +780,33 @@ class ShowBuilder:
         them), lowest layer first; with ``sequential`` a row starts only when
         the previous one has touched down plus ``spindown`` seconds.
 
-        ``style="petals"`` makes the return look like falling sakura petals:
+        ``style="morph"`` (default) re-forms the swarm in the air into its
+        home grid with every drone moving at once and lands it row by row
+        (see :meth:`_land_morph`; drones take the nearest free spots, so
+        ``target`` does not apply); ``style="direct"`` flies the return
+        described above; ``style="petals"`` makes it look like falling sakura
+        petals:
         drones peel off the formation one by one in ``petal_order`` about
         ``petal_interval`` seconds apart and sway sideways by up to ``sway``
         metres, as far as the minimum distance allows (see
         :func:`~murmura.planning.petalize`).
         """
+        if style not in ("morph", "direct", "petals"):
+            raise ValueError("return style must be 'morph', 'direct' or 'petals'")
         spots = self.home.copy()
         hover = altitude
         if hover is None:
             hover = (
                 float(np.min(self.takeoff_altitudes)) if self.takeoff_altitudes is not None else 6.0
+            )
+        if style == "morph":
+            return self._land_morph(
+                hover=hover,
+                rows=rows,
+                velocity=velocity,
+                spindown=spindown,
+                sequential=sequential,
+                color=color,
             )
         if layered:
             groups, gap = takeoff_layers(
@@ -852,8 +870,6 @@ class ShowBuilder:
         petal = None
         if style == "petals" and plan is not None and separation >= self.limits.min_distance - 1e-3:
             petal = self._petals(plan, order=petal_order, interval=petal_interval, sway=sway)
-        if style not in ("direct", "petals"):
-            raise ValueError("return style must be 'direct' or 'petals'")
         if petal is not None:
             self._perform_petals(petal)
             self.log.append(
@@ -871,8 +887,35 @@ class ShowBuilder:
             self._perform(plan, separation, slots, label=label)
         if staging_spread:
             self._move_to(above, label=tr("approach"), stagger=False)
-        self._set_colors(self.t, np.array(parse_color(color), dtype=float), fade=True)
+        return self._land_rows(
+            t0,
+            spots,
+            groups,
+            heights,
+            gap,
+            velocity=velocity,
+            spindown=spindown,
+            sequential=sequential,
+            color=color,
+        )
 
+    def _land_rows(
+        self,
+        t0: float,
+        spots: np.ndarray,
+        groups: np.ndarray,
+        heights: np.ndarray,
+        gap: float,
+        *,
+        velocity: float,
+        spindown: float,
+        sequential: bool,
+        color: Any,
+    ) -> ShowBuilder:
+        """Lands drones hovering above ``spots`` in altitude rows ``heights``
+        (row ``groups[i]`` for drone ``i``, row 0 highest), lowest row first."""
+        self._set_colors(self.t, np.array(parse_color(color), dtype=float), fade=True)
+        waves = len(heights)
         # the takeoff played backwards: the lowest wave lands first, the next
         # one descends when it stays far enough above, neighbours touch down
         # at least ``spindown`` seconds apart
@@ -902,6 +945,77 @@ class ShowBuilder:
         if waves > 1:
             self.log.append(tr("landing in {count} waves", count=waves))
         return self
+
+    def _land_morph(
+        self,
+        *,
+        hover: float,
+        rows: int,
+        velocity: float,
+        spindown: float,
+        sequential: bool,
+        color: Any,
+    ) -> ShowBuilder:
+        """The swarm re-forms in the air into its home grid - a point above
+        every landing spot, in altitude rows - with every drone moving at
+        once along a straight line, then lands row by row.
+
+        Drones are assigned to home points minimising the sum of squared
+        distances. With such an assignment synchronised straight moves never
+        bring two drones closer than the smaller of the start and end
+        spacings divided by sqrt(2) (Turpin et al., "CAPT", 2014). The home
+        grid is built with that spacing, and a formation that is denser first
+        breathes out: it is scaled up about its base, which only increases
+        distances.
+        """
+        d = self.limits.min_distance
+        need = float(np.sqrt(2.0) * d * 1.02)
+        spots = self.home.copy()
+        groups, gap = takeoff_layers(spots, min_distance=need, min_waves=rows)
+        waves = int(groups.max(initial=0)) + 1
+        heights = hover + (waves - 1 - np.arange(waves)) * gap
+        air = spots.copy()
+        air[:, 2] += heights[groups]
+
+        t0 = self.t
+        self.cues.append(Cue(t0, tr("Landing")))
+        self._anchor_colors()
+        label = tr("return")
+        if self.n > 1:
+            spacing = float(np.min(KDTree(self.positions).query(self.positions, k=2)[0][:, 1]))
+            if spacing < need:
+                centre = np.array(
+                    [*self.positions[:, :2].mean(axis=0), float(self.positions[:, 2].min())]
+                )
+                scale = need / max(spacing, 1e-6)
+                wide = centre + (self.positions - centre) * scale
+                self._move_to(wide, stagger=False, label=label)
+        mapping = match_points(self.positions, air)
+        order = np.zeros(self.n, dtype=int)
+        for slot, drone in enumerate(mapping):
+            order[drone] = slot  # type: ignore[index]
+        targets = air[order]
+        clearance, _ = synchronized_clearance(self.positions, targets)
+        self._move_to(targets, stagger=bool(clearance < d - 1e-3), label=label)
+        self.log.append(
+            tr(
+                "return: the swarm re-forms into its home grid in the air ({count} rows)"
+                " and keeps {clearance:.2f} m",
+                count=waves,
+                clearance=clearance,
+            )
+        )
+        return self._land_rows(
+            t0,
+            spots[order],
+            groups[order],
+            heights,
+            gap,
+            velocity=velocity,
+            spindown=spindown,
+            sequential=sequential,
+            color=color,
+        )
 
     # ------------------------------------------------------------------
     # Output

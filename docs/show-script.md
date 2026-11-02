@@ -64,7 +64,7 @@ landing:                    # or `false`
   target: home              # home (own takeoff point, back the way it came) | nearest
   staging_spread: null      # optional enlarged staging grid before the final approach, e.g. 2.0
   rows: 0                   # at least this many landing rows (0 = as needed, 2, 4)
-  style: direct             # direct | petals (drones peel off one by one, swaying)
+  style: morph              # morph (re-form above the pad, all at once) | direct | petals
   petal_order: top          # top | bottom | outside | front | random
   petal_interval: 0.15      # s between drones leaving the formation
   sway: 1.5                 # m of sideways sway

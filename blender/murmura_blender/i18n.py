@@ -281,6 +281,8 @@ RU: dict[str, str] = {
     "At least four rows: every other drone in both directions": "Не меньше четырёх рядов: через одного по обоим направлениям",
     "Drones take off and land row by row, each row after the previous one": "Дроны взлетают и садятся рядами, каждый ряд после предыдущего",
     "Return": "Возврат",
+    "Re-form into homes": "Перестроение в «дома»",
+    "The whole swarm smoothly re-forms in the air into its home grid above the pad, every drone at once and without crossing, then lands row by row": "Весь рой плавно перестраивается в воздухе в «дома» над площадкой - все дроны одновременно и без пересечений, - а потом садится рядами",
     "Sakura petals": "Лепестки сакуры",
     "Drones peel off the formation one by one and drift home swaying, like falling petals": "Дроны по одному отрываются от фигуры и, покачиваясь, летят домой, как опадающие лепестки",
     "Straight home": "Прямо домой",

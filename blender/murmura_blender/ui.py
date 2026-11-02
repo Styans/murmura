@@ -128,7 +128,8 @@ def _draw_entry(layout, s, entry):
         col.prop(entry, "return_style")
         if entry.return_style == "petals":
             col.prop(entry, "petal_order")
-        col.prop(entry, "land_on")
+        if entry.return_style != "morph":
+            col.prop(entry, "land_on")
         col.prop(entry, "layered")
         return
     if entry.source == "COLLECTION":
