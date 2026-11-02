@@ -60,7 +60,18 @@ same plan backwards: the lowest layer lands first, neighbours touch down
 *Spin-down* seconds apart. A pad that already respects the minimum distance
 takes off all at once.
 
-**Re-form into homes (default return).** The whole swarm re-forms in the
+**Sakura petals (default return).** The figure falls apart drone by drone,
+like after a finger snap: each drone leaves on its turn (at random, from
+the top, bottom, edges or front), flies straight to its point above a free
+landing spot and lands at once, while the others are still leaving. The
+figure first breathes out to sqrt(2) times the minimum distance, drones
+not in the figure land first, and every departure time is chosen so that
+the drone keeps the minimum distance to everybody during its whole flight
+and neighbours touch down *Spin-down* seconds apart. Planned drones never
+change, so a finished plan is safe; if no plan is found the swarm re-forms
+into its homes instead.
+
+**Re-form into homes.** The whole swarm re-forms in the
 air into its home grid - a point above every landing spot - with every drone
 moving at once along a straight line, then lands row by row. Drones get the
 home points that minimise the sum of squared distances; with such an
@@ -70,13 +81,9 @@ grid uses sqrt(2) times the minimum distance (4 rows on a 1.5 m pad) and a
 denser formation first breathes out, scaled up about its base. No paths
 cross, nobody waits for a turn, and planning takes a fraction of a second.
 
-**Rows and petals.** Landing goes row by row: a row starts descending only
-when the previous one has touched down (plus *Spin-down*). *Rows* under
-*More Options* asks for at least 2 (checkerboard) or 4 rows. The *Sakura
-petals* return makes drones peel off the formation one by one (from the top,
-bottom, edges, front or at random) and drift home swaying sideways; every
-change is accepted only if the drone still keeps the minimum distance, so on
-a dense pad only part of the drones leave in the cascade.
+**Rows.** Landing goes row by row: a row starts descending only when the
+previous one has touched down (plus *Spin-down*). *Rows* under *More
+Options* asks for at least 2 (checkerboard) or 4 rows.
 
 **Return to the own spot.** With *Land on: Own spot* (the default) every
 drone flies back to the very point where it hovered after takeoff and lands

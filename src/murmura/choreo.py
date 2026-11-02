@@ -18,18 +18,15 @@ from .model import Audio, Cue, Drone, SafetyLimits, Show, ShowLocation
 from .planning import (
     match_points,
     min_transition_durations,
-    petalize,
     plan_waves,
     takeoff_layers,
 )
+from .planning.dissolve import plan_dissolve
 from .planning.matching import synchronized_clearance
 from .planning.transition import MovePlan, plan_safe_moves, synchronised_plan
 from .trajectory import Trajectory
 
 __all__ = ("Motion", "ShowBuilder", "make_motion")
-
-# swaying return paths are fitted tightly: they may pass at the minimum distance
-PETAL_FIT_TOLERANCE = 0.005
 
 
 # ----------------------------------------------------------------------
@@ -704,46 +701,6 @@ class ShowBuilder:
         self.active = self.dark = None
         return self
 
-    def _petals(self, plan: MovePlan, *, order: str, interval: float, sway: float):
-        m = self.speed_margin
-        return petalize(
-            plan,
-            min_distance=self.limits.min_distance,
-            # swaying paths are fitted with curves that may deviate a little
-            sway_margin=2 * PETAL_FIT_TOLERANCE,
-            ground_z=self.home[:, 2],
-            airborne_altitude=self.limits.min_nav_altitude,
-            max_velocity_xy=self.limits.max_velocity_xy * m,
-            max_velocity_z_up=(self.limits.max_velocity_z_up or self.limits.max_velocity_z) * m,
-            max_velocity_z_down=self.limits.max_velocity_z * m,
-            max_acceleration=self.limits.max_acceleration_xy * m,
-            max_acceleration_z=self.limits.max_acceleration_z * m,
-            order=order,
-            interval=interval,
-            sway=sway,
-        )
-
-    def _perform_petals(self, petal) -> None:
-        t0 = self.t
-        step = 1.0 / self.motion_fps
-        for i, traj in enumerate(self.trajectories):
-            dep, dur = float(petal.departures[i]), float(petal.durations[i])
-            if dur <= 0 or np.allclose(petal.start[i], petal.end[i], atol=1e-6):
-                continue
-            traj.hold_until(t0 + dep)
-            if petal.amplitude[i] > 0:
-                k = max(2, int(np.ceil(dur / step)) + 1)
-                taus = np.linspace(0.0, dur, k)
-                track = petal.positions(dep + taus, np.array([i]))[0]
-                traj.extend_with_samples(t0 + dep + taus, track, tolerance=PETAL_FIT_TOLERANCE)
-            else:
-                traj.smooth_to(t0 + dep + dur, petal.end[i])
-        end = t0 + petal.total_duration
-        for traj in self.trajectories:
-            traj.hold_until(end)
-        self.positions = petal.end.copy()
-        self.t = end
-
     def land(
         self,
         *,
@@ -756,10 +713,9 @@ class ShowBuilder:
         staging_spread: float | None = None,
         rows: int = 0,
         sequential: bool = True,
-        style: str = "morph",
-        petal_order: str = "top",
-        petal_interval: float = 0.15,
-        sway: float = 1.5,
+        style: str = "dissolve",
+        order: str = "random",
+        interval: float = 0.15,
     ) -> ShowBuilder:
         """Returns every drone above a landing spot and lands the swarm.
 
@@ -780,24 +736,32 @@ class ShowBuilder:
         them), lowest layer first; with ``sequential`` a row starts only when
         the previous one has touched down plus ``spindown`` seconds.
 
-        ``style="morph"`` (default) re-forms the swarm in the air into its
-        home grid with every drone moving at once and lands it row by row
-        (see :meth:`_land_morph`; drones take the nearest free spots, so
-        ``target`` does not apply); ``style="direct"`` flies the return
-        described above; ``style="petals"`` makes it look like falling sakura
-        petals:
-        drones peel off the formation one by one in ``petal_order`` about
-        ``petal_interval`` seconds apart and sway sideways by up to ``sway``
-        metres, as far as the minimum distance allows (see
-        :func:`~murmura.planning.petalize`).
+        ``style="dissolve"`` (default) makes the formation fall apart drone by
+        drone like sakura petals: each drone leaves on its turn (``order``,
+        about ``interval`` seconds apart), flies straight to its point above
+        a landing spot and lands at once (see :meth:`_land_dissolve`);
+        ``style="morph"`` re-forms the swarm in the air into its home grid with
+        every drone moving at once and lands it row by row (see
+        :meth:`_land_morph`). Both take the nearest free spots, so ``target``
+        does not apply to them; ``style="direct"`` flies the return described
+        above.
         """
-        if style not in ("morph", "direct", "petals"):
-            raise ValueError("return style must be 'morph', 'direct' or 'petals'")
+        if style not in ("dissolve", "morph", "direct"):
+            raise ValueError("return style must be 'dissolve', 'morph' or 'direct'")
         spots = self.home.copy()
         hover = altitude
         if hover is None:
             hover = (
                 float(np.min(self.takeoff_altitudes)) if self.takeoff_altitudes is not None else 6.0
+            )
+        if style == "dissolve":
+            return self._land_dissolve(
+                hover=hover,
+                velocity=velocity,
+                spindown=spindown,
+                color=color,
+                order=order,
+                interval=interval,
             )
         if style == "morph":
             return self._land_morph(
@@ -867,24 +831,7 @@ class ShowBuilder:
         t0 = self.t
         self.cues.append(Cue(t0, tr("Landing")))
         self._anchor_colors()
-        petal = None
-        if style == "petals" and plan is not None and separation >= self.limits.min_distance - 1e-3:
-            petal = self._petals(plan, order=petal_order, interval=petal_interval, sway=sway)
-        if petal is not None:
-            self._perform_petals(petal)
-            self.log.append(
-                tr(
-                    "return like falling petals: {delayed} drones peel off one by one, {swaying} sway",
-                    delayed=petal.delayed,
-                    swaying=petal.swaying,
-                )
-            )
-        else:
-            if style == "petals" and plan is not None:
-                self.log.append(
-                    tr("return: petals are not possible here, drones fly straight home")
-                )
-            self._perform(plan, separation, slots, label=label)
+        self._perform(plan, separation, slots, label=label)
         if staging_spread:
             self._move_to(above, label=tr("approach"), stagger=False)
         return self._land_rows(
@@ -946,6 +893,124 @@ class ShowBuilder:
             self.log.append(tr("landing in {count} waves", count=waves))
         return self
 
+    def _home_grid(self, hover: float, spacing: float, rows: int = 0):
+        """Points above every landing spot in altitude rows, drones of a row at
+        least ``spacing`` apart: (row of each spot, row heights, gap, points)."""
+        groups, gap = takeoff_layers(self.home, min_distance=spacing, min_waves=rows)
+        waves = int(groups.max(initial=0)) + 1
+        heights = hover + (waves - 1 - np.arange(waves)) * gap
+        air = self.home.copy()
+        air[:, 2] += heights[groups]
+        return groups, heights, gap, air
+
+    def _waiting_above_pad(self) -> np.ndarray:
+        """Drones still hovering where they were after takeoff (not used by
+        the last formation)."""
+        if self.takeoff_altitudes is None:
+            return np.zeros(self.n, dtype=bool)
+        hover_points = self.home.copy()
+        hover_points[:, 2] += self.takeoff_altitudes
+        return np.linalg.norm(self.positions - hover_points, axis=1) < 1e-3
+
+    def _land_dissolve(
+        self,
+        *,
+        hover: float,
+        velocity: float,
+        spindown: float,
+        color: Any,
+        order: str,
+        interval: float,
+    ) -> ShowBuilder:
+        """The formation falls apart drone by drone like sakura petals: each
+        drone leaves on its turn, flies straight to its point above a free
+        landing spot and lands at once, while the others are still leaving.
+
+        The formation first breathes out to sqrt(2) times the minimum
+        distance (uniform scaling, safe) and the points above the pad use the
+        same spacing within a row; drones that are not in the formation land
+        first, from where they hover. Departures are planned drone by drone
+        so that every pair keeps the minimum distance (see
+        :func:`~murmura.planning.plan_dissolve`); if that fails the swarm
+        re-forms and lands row by row instead.
+        """
+        d = self.limits.min_distance
+        need = float(np.sqrt(2.0) * d * 1.02)
+        _, _, _, air = self._home_grid(hover, need)
+        t0 = self.t
+        self.cues.append(Cue(t0, tr("Landing")))
+        self._anchor_colors()
+        label = tr("return")
+
+        waiting = self._waiting_above_pad()
+        flying = np.flatnonzero(~waiting)
+        wide = self.positions.copy()
+        wide[flying] = _breathe_out(self.positions[flying], need)
+        if not np.allclose(wide, self.positions):
+            self._move_to(wide, stagger=False, label=label)
+
+        start = self.positions.copy()
+        above = start.copy()  # drones not in the formation land from where they are
+        ground = self.home.copy()
+        free = np.flatnonzero(~waiting)  # spots whose drones are in the formation
+        for slot, drone in enumerate(match_points(start[flying], air[free])):
+            above[flying[drone]] = air[free[slot]]  # type: ignore[index]
+            ground[flying[drone]] = self.home[free[slot]]  # type: ignore[index]
+        m = self.speed_margin
+        plan = plan_dissolve(
+            start,
+            above,
+            ground,
+            min_distance=d,
+            flight_durations=self._duration_fn(self.profile)(above - start),
+            landing_velocity=min(velocity, self.limits.max_velocity_z * m),
+            max_acceleration_z=self.limits.max_acceleration_z * m,
+            airborne_altitude=self.limits.min_nav_altitude,
+            spindown=spindown,
+            order=order,
+            interval=interval,
+            first=waiting,
+        )
+        if not plan.complete:
+            self.log.append(
+                tr("return: crumbling is not possible here, the swarm re-forms into its homes")
+            )
+            return self._land_morph(
+                hover=hover,
+                rows=0,
+                velocity=velocity,
+                spindown=spindown,
+                sequential=True,
+                color=color,
+            )
+
+        t1 = self.t
+        dark = np.array(parse_color(color), dtype=float)
+        for i, traj in enumerate(self.trajectories):
+            leave = t1 + float(plan.departures[i])
+            arrive = leave + float(plan.flight[i])
+            touch = arrive + float(plan.descent[i])
+            traj.hold_until(leave)
+            if plan.flight[i] > 0 and not np.allclose(start[i], above[i], atol=1e-6):
+                traj.smooth_to(arrive, above[i])
+            traj.smooth_to(touch, ground[i])
+            self.lights[i].add(arrive, dark, True)
+            self.lights[i].add(touch, (0, 0, 0), False)
+        end = t1 + plan.total_duration
+        for traj in self.trajectories:
+            traj.hold_until(end)
+        self.positions = ground
+        self.t = end
+        self.segments["landing"] = (t0, end)
+        self.log.append(
+            tr(
+                "return like falling petals: drones leave one by one over {seconds:.0f} s"
+                " and land at once",
+                seconds=float(np.ptp(plan.departures[flying])) if len(flying) else 0.0,
+            )
+        )
+        return self
+
     def _land_morph(
         self,
         *,
@@ -971,11 +1036,7 @@ class ShowBuilder:
         d = self.limits.min_distance
         need = float(np.sqrt(2.0) * d * 1.02)
         spots = self.home.copy()
-        groups, gap = takeoff_layers(spots, min_distance=need, min_waves=rows)
-        waves = int(groups.max(initial=0)) + 1
-        heights = hover + (waves - 1 - np.arange(waves)) * gap
-        air = spots.copy()
-        air[:, 2] += heights[groups]
+        groups, heights, gap, air = self._home_grid(hover, need, rows)
 
         t0 = self.t
         self.cues.append(Cue(t0, tr("Landing")))
@@ -984,11 +1045,7 @@ class ShowBuilder:
         # breathe out: the formation and the drones waiting above the pad (not
         # in the formation) each scale up about their own base until their
         # spacing allows a safe synchronised morph
-        waiting = np.zeros(self.n, dtype=bool)
-        if self.takeoff_altitudes is not None:
-            hover_points = self.home.copy()
-            hover_points[:, 2] += self.takeoff_altitudes
-            waiting = np.linalg.norm(self.positions - hover_points, axis=1) < 1e-3
+        waiting = self._waiting_above_pad()
         wide = self.positions.copy()
         for group in (np.flatnonzero(~waiting), np.flatnonzero(waiting)):
             wide[group] = _breathe_out(self.positions[group], need)
@@ -1009,7 +1066,7 @@ class ShowBuilder:
             tr(
                 "return: the swarm re-forms into its home grid in the air ({count} rows)"
                 " and keeps {clearance:.2f} m",
-                count=waves,
+                count=len(heights),
                 clearance=clearance,
             )
         )

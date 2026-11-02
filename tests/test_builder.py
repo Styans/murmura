@@ -201,18 +201,33 @@ def test_four_landing_rows_on_request():
     assert validate_show(b.build()).passed
 
 
-def test_petal_return_is_safe_and_lands_on_own_spots():
-    b = ShowBuilder(36, limits=SafetyLimits(min_distance=2), grid_spacing=3)
-    b.takeoff(altitude=6)
-    b.scene("Ring", circle(36, radius=14, center=(0, 30, 25)), hold=2)
-    b.land(style="petals", petal_order="top", petal_interval=0.3, sway=1.0)
+def test_dissolve_return_lets_drones_leave_one_by_one_and_land_at_once():
+    limits = SafetyLimits(min_distance=2)
+    b = ShowBuilder(36, limits=limits, grid_spacing=1.5)
+    b.takeoff(altitude=6, climb_velocity=1.2)
+    # 2.97 m apart: no need to breathe out first
+    b.scene("Ring", circle(36, radius=17, center=(0, 30, 25)), hold=2)
+    land0 = b.t
+    b.land(style="dissolve", order="top", interval=1.0)
     show = b.build()
-    note = next(n for n in b.log if "petals" in n)
-    assert "0 drones peel" not in note
+    assert any("one by one" in note for note in b.log), b.log
     report = validate_show(read_skyc(write_skyc(show)))
     assert report.passed, report.summary()
-    end = np.array([d.trajectory.last_position for d in show.drones])
-    assert np.allclose(end, b.home)
+    times = np.linspace(land0, show.end_time, 4000)
+    pos = np.stack([d.trajectory.position_at(times) for d in show.drones], axis=1)
+    # drones leave the ring at different times, the highest first
+    moved = np.linalg.norm(pos - pos[0], axis=2) > 0.05
+    leave = times[np.argmax(moved, axis=0)]
+    assert np.ptp(leave) > 10
+    start_z = pos[0, :, 2]
+    assert np.corrcoef(start_z, leave)[0, 1] < -0.2  # mostly from the top down
+    # some drones are already on the ground while others are still leaving
+    landed = pos[..., 2] <= 1e-3
+    first_down = times[np.argmax(landed.any(axis=1))]
+    assert first_down < leave.max()
+    # every pad spot gets one drone
+    end = {tuple(np.round(d.trajectory.last_position, 3)) for d in show.drones}
+    assert end == {tuple(np.round(p, 3)) for p in b.home}
 
 
 def test_morph_return_reforms_the_swarm_above_the_pad_and_lands_in_rows():
@@ -221,7 +236,7 @@ def test_morph_return_reforms_the_swarm_above_the_pad_and_lands_in_rows():
     b.takeoff(altitude=6, climb_velocity=1.2)
     b.scene("Ring", circle(36, radius=14, center=(0, 30, 25)), hold=2)  # 2.44 m: breathes out
     land0 = b.t
-    b.land(spindown=2.0)
+    b.land(style="morph", spindown=2.0)
     show = b.build()
     assert any("re-forms" in note for note in b.log)
     assert any("4 waves" in note for note in b.log)

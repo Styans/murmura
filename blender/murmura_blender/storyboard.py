@@ -65,10 +65,9 @@ def _land(settings, builder, entry) -> None:
         target=entry.land_on if entry else "home",
         layered=entry.layered if entry else True,
         rows=int(entry.rows) if entry else 0,
-        style=entry.return_style if entry else "morph",
-        petal_order=entry.petal_order if entry else "top",
-        petal_interval=entry.petal_interval if entry else 0.15,
-        sway=entry.sway if entry else 1.5,
+        style=entry.return_style if entry else "dissolve",
+        order=entry.petal_order if entry else "random",
+        interval=entry.petal_interval if entry else 0.15,
     )
 
 

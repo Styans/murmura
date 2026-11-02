@@ -99,15 +99,16 @@ ROWS = [
 
 RETURN_STYLES = [
     (
+        "dissolve",
+        "Sakura petals",
+        "The figure falls apart drone by drone: each drone leaves on its turn, flies straight "
+        "to its spot and lands at once, while the others are still leaving",
+    ),
+    (
         "morph",
         "Re-form into homes",
         "The whole swarm smoothly re-forms in the air into its home grid above the pad, "
         "every drone at once and without crossing, then lands row by row",
-    ),
-    (
-        "petals",
-        "Sakura petals",
-        "Drones peel off the formation one by one and drift home swaying, like falling petals",
     ),
     ("direct", "Straight home", "Drones fly straight back the way they came"),
 ]
@@ -231,8 +232,8 @@ class MURMURA_StoryboardEntry(bpy.types.PropertyGroup):
         items=ROWS,
         default="0",
     )
-    return_style: EnumProperty(name="Return", items=RETURN_STYLES, default="morph")
-    petal_order: EnumProperty(name="Petals fall", items=PETAL_ORDERS, default="top")
+    return_style: EnumProperty(name="Return", items=RETURN_STYLES, default="dissolve")
+    petal_order: EnumProperty(name="Petals fall", items=PETAL_ORDERS, default="random")
     petal_interval: FloatProperty(
         name="Petal interval",
         description="Time between drones leaving the formation",
@@ -240,14 +241,6 @@ class MURMURA_StoryboardEntry(bpy.types.PropertyGroup):
         min=0.02,
         max=2.0,
         unit="TIME_ABSOLUTE",
-    )
-    sway: FloatProperty(
-        name="Sway",
-        description="How far the petals sway sideways on their way home",
-        default=1.5,
-        min=0.0,
-        max=5.0,
-        unit="LENGTH",
     )
 
     # filled in by Recalculate

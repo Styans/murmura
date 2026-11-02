@@ -24,23 +24,24 @@ Engine:
 - Landing in rows: a row starts descending only when the previous one has
   touched down plus the spin-down time (`land(sequential=True)`), and
   `takeoff(rows=...)` / `land(rows=...)` ask for at least 2 or 4 rows.
-- New default return `land(style="morph")`: the swarm re-forms in the air
+- `land(style="morph")`: the swarm re-forms in the air
   into its home grid with every drone moving at once along straight lines
   (optimal squared-distance assignment, home grid spaced sqrt(2) times the
   minimum distance, a denser formation first scaled up about its base, so no
   two drones get closer than the minimum), then lands row by row.
-- "Sakura petals" return (`land(style="petals")`): drones peel off the
-  formation one by one and drift home swaying; laid over the safe return
-  plan and accepted drone by drone only where the minimum distance still
-  holds (`planning.petalize`).
+- New default return `land(style="dissolve")`, "sakura petals": the
+  formation falls apart drone by drone, each drone flying straight to its
+  point above a free landing spot and landing at once while the others are
+  still leaving. Departures are planned drone by drone so that every pair
+  keeps the minimum distance and neighbours touch down `spindown` apart
+  (`planning.plan_dissolve`); if no plan is found the swarm re-forms instead.
 
 Blender add-on:
 
 - *In turns* option on takeoff and landing entries.
 - Landing defaults to *Own spot*; the *Return spread* setting was removed.
-- Landing options: *Return* (*Re-form into homes* / *Sakura petals* /
-  *Straight home*), petal order,
-  interval and sway; *Rows* for takeoff and landing.
+- Landing options: *Return* (*Sakura petals* / *Re-form into homes* /
+  *Straight home*), petal order and interval; *Rows* for takeoff and landing.
 - Simpler interface laid out like Skybrush Studio: three sidebar tabs -
   *Murmura* (drones and show), *Murmura LEDs* (lights, painting) and
   *Murmura Export* (safety, validation, export). Rarely used settings moved

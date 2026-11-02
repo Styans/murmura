@@ -64,10 +64,9 @@ landing:                   # или false
   target: home             # home (своя точка взлёта, обратно тем же путём) | nearest (ближайшая)
   staging_spread: null     # необязательная растяжка сетки перед посадкой, например 2.0
   rows: 0                  # минимум рядов посадки (0 - сколько нужно, 2, 4)
-  style: morph             # morph (перестроение в «дома») | direct (прямо) | petals (лепестки)
-  petal_order: top         # top | bottom | outside | front | random
-  petal_interval: 0.15     # с между отрывом дронов от фигуры
-  sway: 1.5                # м покачивания в стороны
+  style: dissolve          # dissolve (лепестки: по одному) | morph (в «дома») | direct
+  order: random            # random | top | bottom | outside | front
+  interval: 0.15           # с между отрывом дронов от фигуры
   color: "#303030"
 
 audio: {file: music.mp3, start: 0.0}
