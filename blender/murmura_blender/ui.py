@@ -136,8 +136,18 @@ def _draw_entry(layout, s, entry):
         col.prop(entry, "collection")
     else:
         col.prop(entry, "target", text=tr("Points"))
-    col.prop(entry, "hold")
+    if not entry.follow:
+        col.prop(entry, "hold")
     col.prop_search(entry, "group", s, "groups", icon="GROUP")
+    col.prop(entry, "follow")
+    if entry.follow:
+        sub = col.column(align=True)
+        row = sub.row(align=True)
+        row.prop(entry, "follow_start", text=tr("From"))
+        row.prop(entry, "follow_end", text=tr("To"))
+        row.operator("murmura.follow_auto", text="", icon="TIME")
+        if not entry.follow_manual:
+            sub.prop(entry, "hold", text=tr("Binding length"))
 
 
 class MURMURA_PT_show(_Panel, bpy.types.Panel):

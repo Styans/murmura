@@ -202,6 +202,20 @@ class MURMURA_OT_storyboard_duplicate(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class MURMURA_OT_follow_auto(bpy.types.Operator):
+    """Bind the drones to the vertices from the moment they arrive (recalculate to apply)"""
+
+    bl_idname = "murmura.follow_auto"
+    bl_label = "Bind at Arrival"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        s = _settings(context)
+        if 0 <= s.storyboard_index < len(s.storyboard):
+            s.storyboard[s.storyboard_index].follow_manual = False
+        return {"FINISHED"}
+
+
 class MURMURA_OT_storyboard_jump(bpy.types.Operator):
     """Jump to the start of the selected entry"""
 
@@ -413,6 +427,7 @@ CLASSES = (
     MURMURA_OT_storyboard_move,
     MURMURA_OT_storyboard_duplicate,
     MURMURA_OT_storyboard_jump,
+    MURMURA_OT_follow_auto,
     MURMURA_OT_recalculate,
     MURMURA_OT_group_add,
     MURMURA_OT_group_remove,

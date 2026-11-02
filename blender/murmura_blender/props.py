@@ -122,6 +122,12 @@ PETAL_ORDERS = [
 ]
 
 
+def _follow_frames_changed(self, context):
+    # frames typed by the user (not written by Recalculate) stay as they are
+    if not getattr(MURMURA_StoryboardEntry, "_writing", False):
+        self.follow_manual = True
+
+
 def _hex(color) -> str:
     return "#" + "".join(f"{int(round(max(0.0, min(1.0, c)) * 255)):02x}" for c in color[:3])
 
@@ -206,6 +212,30 @@ class MURMURA_StoryboardEntry(bpy.types.PropertyGroup):
 
     # motion
     motion: EnumProperty(name="Motion", items=MOTIONS, default="none")
+
+    # following an animated model
+    follow: BoolProperty(
+        name="Follow vertices",
+        description=(
+            "Once the drones arrive, every drone stays bound to its vertex and follows it "
+            "while the model is animated, between the binding start and end"
+        ),
+        default=False,
+    )
+    follow_start: IntProperty(
+        name="Binding start",
+        description="Frame from which the drones follow the vertices (drag the ▶ marker)",
+        default=0,
+        update=_follow_frames_changed,
+    )
+    follow_end: IntProperty(
+        name="Binding end",
+        description="Frame until which the drones follow the vertices (drag the ■ marker)",
+        default=0,
+        update=_follow_frames_changed,
+    )
+    follow_manual: BoolProperty(default=False)
+    follow_markers: StringProperty(default="")
     motion_rate: FloatProperty(name="Rate", default=2.0, min=0.0)
 
     # takeoff / landing

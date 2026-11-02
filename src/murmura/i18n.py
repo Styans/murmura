@@ -60,6 +60,8 @@ RU: dict[str, str] = {
     "approach": "заход на посадку",
     "transition": "переход",
     "takeoff in {count} waves, layers {gap:.1f} m apart": "взлёт в {count} волны (по очереди), слои через {gap:.1f} м",
+    "{name}: drones arrive {late:.1f} s after the binding starts": "{name}: дроны долетают на {late:.1f} с позже начала привязки",
+    "{name}: the model moves faster than the drones may fly ({speed:.1f} m/s); slow its animation down": "{name}: модель движется быстрее, чем могут лететь дроны ({speed:.1f} м/с) - замедлите её анимацию",
     "landing in {count} waves": "посадка в {count} волны (по очереди)",
     "return: the swarm re-forms into its home grid in the air ({count} rows) and keeps {clearance:.2f} m": "возврат: рой перестраивается в воздухе в «дома» (рядов: {count}) и держит {clearance:.2f} м",
     "return: crumbling is not possible here, the swarm re-forms into its homes": "возврат: рассыпание здесь невозможно - рой перестраивается в «дома»",

@@ -36,8 +36,17 @@ Engine:
   keeps the minimum distance and neighbours touch down `spindown` apart
   (`planning.plan_dissolve`); if no plan is found the swarm re-forms instead.
 
+- Formations can follow an animated model: `scene(track=(times, frames),
+  track_start=...)` binds every drone to its point and makes it repeat the
+  point's motion; the report warns when the model moves faster than the
+  limits allow.
+
 Blender add-on:
 
+- *Follow vertices* on formations: once the drones arrive they follow the
+  vertices of the animated model frame by frame. The binding range appears on
+  the timeline as a pair of markers that can be dragged; recalculating picks
+  up the new range.
 - *In turns* option on takeoff and landing entries.
 - Landing defaults to *Own spot*; the *Return spread* setting was removed.
 - Landing options: *Return* (*Sakura petals* / *Re-form into homes* /

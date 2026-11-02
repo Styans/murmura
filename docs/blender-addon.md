@@ -50,6 +50,16 @@ sub-panels.
    line below the button says whether the show is safe.
 4. **Export .skyc** on the *Murmura Export* tab.
 
+**Follow vertices.** For an animated model (moving, turning or deforming,
+through its parent or modifiers) turn on *Follow vertices* on the formation:
+once the drones arrive, every drone stays bound to its vertex and follows it
+frame by frame. Recalculating puts two markers on the timeline, *▶ name* and
+*■ name*, for the start and end of the binding (by default from the arrival
+for *Binding length* seconds); drag them, or type the frames, and recalculate
+to bind the drones to another part of the animation. The drones fly to the
+vertices as they will be at the binding start, so nothing jumps; the report
+warns if the model moves faster than the drones may fly.
+
 **Takeoff and landing in turns.** When drones stand closer than the minimum
 distance on the pad, *In turns* (on by default) splits them into waves whose
 drones are at least the minimum distance apart - a checkerboard on a square

@@ -639,6 +639,77 @@ class ShowBuilder:
         self.t = t1
         return self
 
+    def _follow(
+        self,
+        track: tuple[np.ndarray, np.ndarray],
+        start: float | None,
+        assignment: list[int],
+        effect: Effect | None,
+        name: str,
+    ) -> None:
+        """Drones assigned to formation points follow them along ``track``."""
+        times = np.asarray(track[0], dtype=float)
+        frames = np.asarray(track[1], dtype=float)
+        if len(times) < 2:
+            return
+        if start is not None and start > self.t + 1e-9:
+            self.wait(start - self.t, effect=effect)
+        elif start is not None and start < self.t - 1e-6:
+            self.log.append(
+                tr("warning")
+                + ": "
+                + tr(
+                    "{name}: drones arrive {late:.1f} s after the binding starts",
+                    name=name,
+                    late=self.t - start,
+                )
+            )
+        slot = np.asarray(assignment)
+        bound = slot >= 0
+        base = self.positions.copy()
+        path = np.repeat(base[None], len(times), axis=0)
+        path[:, bound] = frames[:, slot[bound]]
+        # the drones are where the points were at the start of the track
+        path += (base - path[0])[None]
+
+        dt = np.diff(times)[:, None]
+        velocity = np.diff(path, axis=0) / dt[..., None]
+        fastest_xy = float(np.max(np.linalg.norm(velocity[..., :2], axis=2), initial=0.0))
+        fastest_z = float(np.max(np.abs(velocity[..., 2]), initial=0.0))
+        if (
+            fastest_xy > self.limits.max_velocity_xy + 1e-6
+            or fastest_z > self.limits.max_velocity_z + 1e-6
+        ):
+            self.log.append(
+                tr("warning")
+                + ": "
+                + tr(
+                    "{name}: the model moves faster than the drones may fly"
+                    " ({speed:.1f} m/s); slow its animation down",
+                    name=name,
+                    speed=max(fastest_xy, fastest_z),
+                )
+            )
+
+        t0 = self.t
+        for i, traj in enumerate(self.trajectories):
+            if bound[i]:
+                traj.extend_with_samples(t0 + times, path[:, i, :], tolerance=self.fit_tolerance)
+            traj.hold_until(t0 + times[-1])
+        self.positions = path[-1].copy()
+
+        def sampler(sample_times):
+            rel = np.clip(np.asarray(sample_times, dtype=float) - t0, times[0], times[-1])
+            k = np.clip(np.searchsorted(times, rel), 1, len(times) - 1)
+            w = ((rel - times[k - 1]) / (times[k] - times[k - 1]))[:, None, None]
+            return path[k - 1] * (1 - w) + path[k] * w
+
+        if effect is not None:
+            self._apply_effect(effect, t0, t0 + times[-1], sampler, moving=True)
+        else:
+            self._set_colors(t0 + times[-1], self.colors, fade=True)
+        self.t = t0 + float(times[-1])
+
     def scene(
         self,
         name: str,
@@ -656,11 +727,21 @@ class ShowBuilder:
         start: float | None = None,
         drones: Sequence[int] | None = None,
         keep_lights: bool = False,
+        track: tuple[np.ndarray, np.ndarray] | None = None,
+        track_start: float | None = None,
     ) -> ShowBuilder:
         """Transition into a formation and hold it.
 
         ``drones`` limits the scene to a group of drones (by index); with
         ``keep_lights`` the lights are left as they are.
+
+        ``track`` makes the drones follow the formation points as they move
+        (an animated model): ``(times, frames)`` with ``frames[k, p]`` the
+        position of point ``p`` at ``times[k]`` seconds after ``track_start``
+        (absolute show time, default: when the drones arrive). The drones fly
+        to ``points``, which should be the points at ``track_start``, wait
+        there until ``track_start`` and then follow their points until the
+        end of the track; ``hold`` is not used.
 
         Lights fade from the previous scene into the new effect during the
         transition unless ``transition_effect`` is given. ``start`` pins the
@@ -672,7 +753,7 @@ class ShowBuilder:
             effect = FormationColors() if colors is not None else Solid("white")
         t0 = self.t
         self.cues.append(Cue(t0, name))
-        self.transition_to(
+        assignment = self.transition_to(
             points,
             colors=colors,
             duration=transition_duration,
@@ -690,7 +771,9 @@ class ShowBuilder:
             self._set_colors(self.t, target_colors, fade=True)
         if "show" not in self.segments:
             self.segments["show"] = (t0, t0)
-        if effect is None:
+        if track is not None:
+            self._follow(track, track_start, assignment, effect, name)
+        elif effect is None:
             if motion is None:
                 self.wait(hold)
             else:

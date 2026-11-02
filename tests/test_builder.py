@@ -252,3 +252,42 @@ def test_morph_return_reforms_the_swarm_above_the_pad_and_lands_in_rows():
         if len(up) > 1:
             dist = np.linalg.norm(up[:, None] - up[None], axis=2) + np.eye(len(up)) * 9
             assert dist.min() >= 2 - 1e-3
+
+
+def test_drones_follow_animated_formation_points():
+    limits = SafetyLimits(min_distance=2)
+    b = ShowBuilder(24, limits=limits, grid_spacing=3)
+    b.takeoff(altitude=6)
+    ring = circle(24, radius=10, center=(0, 0, 25), plane="xy")
+    times = np.linspace(0.0, 8.0, 81)
+    # the "model" drifts 8 m sideways and rises 4 m while it turns a little
+    angle = 0.3 * times / times[-1]
+    rot = np.stack([np.cos(angle), -np.sin(angle), np.sin(angle), np.cos(angle)], axis=1).reshape(
+        -1, 2, 2
+    )
+    frames = np.empty((len(times), 24, 3))
+    frames[..., :2] = np.einsum("kij,pj->kpi", rot, ring[:, :2])
+    frames[..., 0] += times[:, None]
+    frames[..., 2] = 25 + 0.5 * times[:, None]
+    arrive = b.t
+    b.scene("Moving ring", frames[0], track=(times, frames), track_start=arrive + 30.0)
+    start = arrive + 30.0
+    show = b.build()
+    assert validate_show(show).passed
+    # every drone sits on one point and follows it to the end of the track
+    pos = lambda t: np.array([d.trajectory.position_at([t])[0] for d in show.drones])  # noqa: E731
+    for k in (0, 40, 80):
+        p = pos(start + times[k])
+        dist = np.linalg.norm(p[:, None] - frames[k][None], axis=2).min(axis=1)
+        assert dist.max() < 0.05
+    assert b.t == pytest.approx(start + times[-1])
+
+
+def test_too_fast_model_animation_is_reported():
+    b = ShowBuilder(4, limits=SafetyLimits(min_distance=2), grid_spacing=3)
+    b.takeoff(altitude=6)
+    pts = np.array([[x, 0.0, 20.0] for x in (-6, -2, 2, 6)])
+    times = np.linspace(0.0, 1.0, 11)
+    frames = pts[None] + np.array([30.0, 0.0, 0.0]) * times[:, None, None]  # 30 m/s
+    b.scene("Fast", frames[0], track=(times, frames))
+    assert any("faster than the drones" in note for note in b.log)
