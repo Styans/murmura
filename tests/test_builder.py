@@ -157,3 +157,59 @@ def test_drones_return_to_their_own_takeoff_points():
         track = d.trajectory.position_at(times)
         assert np.min(np.linalg.norm(track - point, axis=1)) < 0.02
     assert not any("nearest" in note for note in b.log)
+
+
+def _touchdowns(show, t0):
+    times = np.linspace(t0, show.end_time, 6000)
+    out = []
+    for d in show.drones:
+        z = d.trajectory.position_at(times)[:, 2]
+        out.append(times[np.argmax(z <= 1e-3)])
+    return np.array(out)
+
+
+def test_landing_rows_follow_one_another():
+    limits = SafetyLimits(min_distance=2)
+    b = ShowBuilder(36, limits=limits, grid_spacing=1.5)
+    b.takeoff(altitude=6, climb_velocity=1.2)
+    b.scene("Ring", circle(36, radius=14, center=(0, 30, 25)), hold=2)
+    b.land(spindown=2.0)
+    show = b.build()
+    assert validate_show(show).passed
+    touch = np.round(_touchdowns(show, show.segments["landing"][0]), 1)
+    first, second = np.unique(touch)
+    # the second row starts descending only after the first one is down
+    assert np.sum(touch == first) == np.sum(touch == second) == 18
+    land0, _ = show.segments["landing"]
+    times = np.linspace(land0, show.end_time, 6000)
+    later = [d for d, t in zip(show.drones, touch) if t == second]
+    hover = max(d.trajectory.position_at([first])[0][2] for d in later)
+    # the moment each of them leaves its hover height
+    leave = [
+        times[len(times) - 1 - np.argmax(d.trajectory.position_at(times)[::-1, 2] >= hover - 0.05)]
+        for d in later
+    ]
+    assert min(leave) >= first + 2.0 - 0.1
+
+
+def test_four_landing_rows_on_request():
+    b = ShowBuilder(36, limits=SafetyLimits(min_distance=2), grid_spacing=1.5)
+    b.takeoff(altitude=6, rows=4)
+    b.scene("Ring", circle(36, radius=14, center=(0, 30, 25)), hold=2)
+    b.land(rows=4)
+    assert any("4 waves" in note for note in b.log)
+    assert validate_show(b.build()).passed
+
+
+def test_petal_return_is_safe_and_lands_on_own_spots():
+    b = ShowBuilder(36, limits=SafetyLimits(min_distance=2), grid_spacing=3)
+    b.takeoff(altitude=6)
+    b.scene("Ring", circle(36, radius=14, center=(0, 30, 25)), hold=2)
+    b.land(style="petals", petal_order="top", petal_interval=0.3, sway=1.0)
+    show = b.build()
+    note = next(n for n in b.log if "petals" in n)
+    assert "0 drones peel" not in note
+    report = validate_show(read_skyc(write_skyc(show)))
+    assert report.passed, report.summary()
+    end = np.array([d.trajectory.last_position for d in show.drones])
+    assert np.allclose(end, b.home)

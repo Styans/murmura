@@ -125,6 +125,9 @@ def _draw_entry(layout, s, entry):
         col.prop(entry, "layered")
         return
     if entry.kind == "LAND":
+        col.prop(entry, "return_style")
+        if entry.return_style == "petals":
+            col.prop(entry, "petal_order")
         col.prop(entry, "land_on")
         col.prop(entry, "layered")
         return
@@ -192,6 +195,13 @@ class MURMURA_PT_show_more(_Panel, bpy.types.Panel):
         entry = _active_entry(s)
         if entry is not None:
             col = layout.column(align=True)
+            if entry.kind in {"TAKEOFF", "LAND"}:
+                sub = col.column(align=True)
+                sub.enabled = entry.layered
+                sub.prop(entry, "rows")
+            if entry.kind == "LAND" and entry.return_style == "petals":
+                col.prop(entry, "petal_interval")
+                col.prop(entry, "sway")
             if entry.kind == "FORMATION":
                 col.prop(entry, "source")
                 if (

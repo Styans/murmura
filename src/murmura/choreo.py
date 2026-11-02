@@ -17,6 +17,7 @@ from .model import Audio, Cue, Drone, SafetyLimits, Show, ShowLocation
 from .planning import (
     match_points,
     min_transition_durations,
+    petalize,
     plan_waves,
     takeoff_layers,
 )
@@ -24,6 +25,9 @@ from .planning.transition import MovePlan, plan_safe_moves, synchronised_plan
 from .trajectory import Trajectory
 
 __all__ = ("Motion", "ShowBuilder", "make_motion")
+
+# swaying return paths are fitted tightly: they may pass at the minimum distance
+PETAL_FIT_TOLERANCE = 0.005
 
 
 # ----------------------------------------------------------------------
@@ -333,8 +337,12 @@ class ShowBuilder:
         color: Any = (80, 80, 80),
         duration: float | None = None,
         climb_velocity: float | None = None,
+        rows: int = 0,
     ) -> ShowBuilder:
         """Vertical takeoff from the home positions.
+
+        ``rows`` asks for at least that many waves (2: checkerboard, 4: every
+        other drone in both directions) even when fewer would do.
 
         With ``layered`` takeoff, drones standing closer than the minimum
         distance take off in waves (a checkerboard on a square grid): each
@@ -347,7 +355,9 @@ class ShowBuilder:
         ``duration`` when only that is given, and never above the limits.
         """
         if layered:
-            groups, gap = takeoff_layers(self.home, min_distance=self.limits.min_distance)
+            groups, gap = takeoff_layers(
+                self.home, min_distance=self.limits.min_distance, min_waves=rows
+            )
         else:
             groups, gap = np.zeros(self.n, dtype=int), 0.0
         if layer_spacing is not None and gap > 0:
@@ -692,6 +702,46 @@ class ShowBuilder:
         self.active = self.dark = None
         return self
 
+    def _petals(self, plan: MovePlan, *, order: str, interval: float, sway: float):
+        m = self.speed_margin
+        return petalize(
+            plan,
+            min_distance=self.limits.min_distance,
+            # swaying paths are fitted with curves that may deviate a little
+            sway_margin=2 * PETAL_FIT_TOLERANCE,
+            ground_z=self.home[:, 2],
+            airborne_altitude=self.limits.min_nav_altitude,
+            max_velocity_xy=self.limits.max_velocity_xy * m,
+            max_velocity_z_up=(self.limits.max_velocity_z_up or self.limits.max_velocity_z) * m,
+            max_velocity_z_down=self.limits.max_velocity_z * m,
+            max_acceleration=self.limits.max_acceleration_xy * m,
+            max_acceleration_z=self.limits.max_acceleration_z * m,
+            order=order,
+            interval=interval,
+            sway=sway,
+        )
+
+    def _perform_petals(self, petal) -> None:
+        t0 = self.t
+        step = 1.0 / self.motion_fps
+        for i, traj in enumerate(self.trajectories):
+            dep, dur = float(petal.departures[i]), float(petal.durations[i])
+            if dur <= 0 or np.allclose(petal.start[i], petal.end[i], atol=1e-6):
+                continue
+            traj.hold_until(t0 + dep)
+            if petal.amplitude[i] > 0:
+                k = max(2, int(np.ceil(dur / step)) + 1)
+                taus = np.linspace(0.0, dur, k)
+                track = petal.positions(dep + taus, np.array([i]))[0]
+                traj.extend_with_samples(t0 + dep + taus, track, tolerance=PETAL_FIT_TOLERANCE)
+            else:
+                traj.smooth_to(t0 + dep + dur, petal.end[i])
+        end = t0 + petal.total_duration
+        for traj in self.trajectories:
+            traj.hold_until(end)
+        self.positions = petal.end.copy()
+        self.t = end
+
     def land(
         self,
         *,
@@ -702,6 +752,12 @@ class ShowBuilder:
         color: Any = (80, 80, 80),
         layered: bool = True,
         staging_spread: float | None = None,
+        rows: int = 0,
+        sequential: bool = True,
+        style: str = "direct",
+        petal_order: str = "top",
+        petal_interval: float = 0.15,
+        sway: float = 1.5,
     ) -> ShowBuilder:
         """Returns every drone above a landing spot and lands the swarm.
 
@@ -717,6 +773,16 @@ class ShowBuilder:
         current formation, then contracts and descends uniformly onto the
         landing grid. The second step is an affine blend of two similar grids,
         so it can never bring drones closer than the grid spacing.
+
+        The swarm lands in rows (the takeoff waves, at least ``rows`` of
+        them), lowest layer first; with ``sequential`` a row starts only when
+        the previous one has touched down plus ``spindown`` seconds.
+
+        ``style="petals"`` makes the return look like falling sakura petals:
+        drones peel off the formation one by one in ``petal_order`` about
+        ``petal_interval`` seconds apart and sway sideways by up to ``sway``
+        metres, as far as the minimum distance allows (see
+        :func:`~murmura.planning.petalize`).
         """
         spots = self.home.copy()
         hover = altitude
@@ -725,7 +791,9 @@ class ShowBuilder:
                 float(np.min(self.takeoff_altitudes)) if self.takeoff_altitudes is not None else 6.0
             )
         if layered:
-            groups, gap = takeoff_layers(spots, min_distance=self.limits.min_distance)
+            groups, gap = takeoff_layers(
+                spots, min_distance=self.limits.min_distance, min_waves=rows
+            )
         else:
             groups, gap = np.zeros(self.n, dtype=int), 0.0
         waves = int(groups.max(initial=0)) + 1
@@ -781,7 +849,26 @@ class ShowBuilder:
         t0 = self.t
         self.cues.append(Cue(t0, tr("Landing")))
         self._anchor_colors()
-        self._perform(plan, separation, slots, label=label)
+        petal = None
+        if style == "petals" and plan is not None and separation >= self.limits.min_distance - 1e-3:
+            petal = self._petals(plan, order=petal_order, interval=petal_interval, sway=sway)
+        if style not in ("direct", "petals"):
+            raise ValueError("return style must be 'direct' or 'petals'")
+        if petal is not None:
+            self._perform_petals(petal)
+            self.log.append(
+                tr(
+                    "return like falling petals: {delayed} drones peel off one by one, {swaying} sway",
+                    delayed=petal.delayed,
+                    swaying=petal.swaying,
+                )
+            )
+        else:
+            if style == "petals" and plan is not None:
+                self.log.append(
+                    tr("return: petals are not possible here, drones fly straight home")
+                )
+            self._perform(plan, separation, slots, label=label)
         if staging_spread:
             self._move_to(above, label=tr("approach"), stagger=False)
         self._set_colors(self.t, np.array(parse_color(color), dtype=float), fade=True)
@@ -796,6 +883,7 @@ class ShowBuilder:
             velocity=min(velocity, self.limits.max_velocity_z * m),
             max_acceleration=self.limits.max_acceleration_z * m,
             min_offset=spindown if waves > 1 else 0.0,
+            sequential=sequential,
         )
         total = float(np.max(climb + durations))
         t1 = self.t

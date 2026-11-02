@@ -21,11 +21,20 @@ Engine:
   wait in visible batches and are much shorter (a 500-drone return went
   from 103 s to 59 s).
 - `MovePlan.reversed()`.
+- Landing in rows: a row starts descending only when the previous one has
+  touched down plus the spin-down time (`land(sequential=True)`), and
+  `takeoff(rows=...)` / `land(rows=...)` ask for at least 2 or 4 rows.
+- "Sakura petals" return (`land(style="petals")`): drones peel off the
+  formation one by one and drift home swaying; laid over the safe return
+  plan and accepted drone by drone only where the minimum distance still
+  holds (`planning.petalize`).
 
 Blender add-on:
 
 - *In turns* option on takeoff and landing entries.
 - Landing defaults to *Own spot*; the *Return spread* setting was removed.
+- Landing options: *Return* (*Sakura petals* / *Straight home*), petal order,
+  interval and sway; *Rows* for takeoff and landing.
 - Simpler interface laid out like Skybrush Studio: three sidebar tabs -
   *Murmura* (drones and show), *Murmura LEDs* (lights, painting) and
   *Murmura Export* (safety, validation, export). Rarely used settings moved

@@ -91,6 +91,30 @@ LAND_ON = [
 ]
 
 
+ROWS = [
+    ("0", "Auto", "As many rows as the minimum distance needs (2 on a dense square pad)"),
+    ("2", "2 (checkerboard)", "At least two rows: every other drone, like a checkerboard"),
+    ("4", "4", "At least four rows: every other drone in both directions"),
+]
+
+RETURN_STYLES = [
+    (
+        "petals",
+        "Sakura petals",
+        "Drones peel off the formation one by one and drift home swaying, like falling petals",
+    ),
+    ("direct", "Straight home", "Drones fly straight back the way they came"),
+]
+
+PETAL_ORDERS = [
+    ("top", "From the top", "The highest drones leave first"),
+    ("bottom", "From the bottom", "The lowest drones leave first"),
+    ("outside", "From the edges", "Drones furthest from the centre leave first"),
+    ("front", "From the front", "Drones nearest to home leave first"),
+    ("random", "Random", "Drones leave in random order"),
+]
+
+
 def _hex(color) -> str:
     return "#" + "".join(f"{int(round(max(0.0, min(1.0, c)) * 255)):02x}" for c in color[:3])
 
@@ -195,6 +219,30 @@ class MURMURA_StoryboardEntry(bpy.types.PropertyGroup):
         default=True,
     )
     land_on: EnumProperty(name="Land on", items=LAND_ON, default="home")
+    rows: EnumProperty(
+        name="Rows",
+        description="Drones take off and land row by row, each row after the previous one",
+        items=ROWS,
+        default="0",
+    )
+    return_style: EnumProperty(name="Return", items=RETURN_STYLES, default="petals")
+    petal_order: EnumProperty(name="Petals fall", items=PETAL_ORDERS, default="top")
+    petal_interval: FloatProperty(
+        name="Petal interval",
+        description="Time between drones leaving the formation",
+        default=0.15,
+        min=0.02,
+        max=2.0,
+        unit="TIME_ABSOLUTE",
+    )
+    sway: FloatProperty(
+        name="Sway",
+        description="How far the petals sway sideways on their way home",
+        default=1.5,
+        min=0.0,
+        max=5.0,
+        unit="LENGTH",
+    )
 
     # filled in by Recalculate
     frame_start: IntProperty(default=0)

@@ -63,6 +63,11 @@ landing:                    # or `false`
   spindown: 3               # s between touchdowns of neighbouring drones
   target: home              # home (own takeoff point, back the way it came) | nearest
   staging_spread: null      # optional enlarged staging grid before the final approach, e.g. 2.0
+  rows: 0                   # at least this many landing rows (0 = as needed, 2, 4)
+  style: direct             # direct | petals (drones peel off one by one, swaying)
+  petal_order: top          # top | bottom | outside | front | random
+  petal_interval: 0.15      # s between drones leaving the formation
+  sway: 1.5                 # m of sideways sway
   color: "#303030"
 
 audio: {file: music.mp3, start: 0.0}

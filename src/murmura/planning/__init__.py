@@ -3,6 +3,7 @@
 from .grouping import decompose_points, plan_takeoff
 from .landing import plan_landing
 from .matching import match_points, synchronized_clearance
+from .petals import PETAL_ORDERS, PetalPlan, petalize
 from .rth import RTHPlan, plan_smart_rth
 from .transition import (
     PROFILES,
@@ -18,7 +19,9 @@ from .transition import (
 from .waves import plan_waves, takeoff_layers
 
 __all__ = (
+    "PETAL_ORDERS",
     "PROFILES",
+    "PetalPlan",
     "MovePlan",
     "RTHPlan",
     "TransitionPlan",
@@ -31,6 +34,7 @@ __all__ = (
     "plan_smart_rth",
     "plan_takeoff",
     "plan_transition",
+    "petalize",
     "plan_waves",
     "profile_progress",
     "stagger_transition",

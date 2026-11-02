@@ -60,6 +60,14 @@ same plan backwards: the lowest layer lands first, neighbours touch down
 *Spin-down* seconds apart. A pad that already respects the minimum distance
 takes off all at once.
 
+**Rows and petals.** Landing goes row by row: a row starts descending only
+when the previous one has touched down (plus *Spin-down*). *Rows* under
+*More Options* asks for at least 2 (checkerboard) or 4 rows. The *Sakura
+petals* return makes drones peel off the formation one by one (from the top,
+bottom, edges, front or at random) and drift home swaying sideways; every
+change is accepted only if the drone still keeps the minimum distance, so on
+a dense pad only part of the drones leave in the cascade.
+
 **Return to the own spot.** With *Land on: Own spot* (the default) every
 drone flies back to the very point where it hovered after takeoff and lands
 where it took off. The return is the flight from the takeoff points into the

@@ -23,9 +23,18 @@ __all__ = ("plan_waves", "takeoff_layers")
 
 
 def takeoff_layers(
-    points: Sequence[Sequence[float]] | np.ndarray, *, min_distance: float
+    points: Sequence[Sequence[float]] | np.ndarray,
+    *,
+    min_distance: float,
+    min_waves: int = 0,
 ) -> tuple[np.ndarray, float]:
     """Splits pad positions into waves.
+
+    Drones closer than ``min_distance`` always end up in different waves.
+    With ``min_waves`` the split uses a larger radius until there are at
+    least that many waves (when the pad allows it), so drones moving at the
+    same time are further apart: 2 is a checkerboard on a square grid, 4 is
+    every other drone in both directions.
 
     Returns the wave of every drone (wave 0 is the largest) and the vertical
     gap between altitude layers that keeps drones of different waves at least
@@ -34,10 +43,22 @@ def takeoff_layers(
     """
     pts = as_points(points)
     groups = np.asarray(plan_takeoff(pts, min_distance=min_distance), dtype=int)
-    if len(pts) < 2 or groups.max(initial=0) == 0:
+    if len(pts) < 2:
         return groups, 0.0
     horizontal = pts[:, :2]
+    if min_waves > groups.max(initial=0) + 1:
+        k = min(len(pts), 13)
+        distances = np.unique(np.round(cKDTree(horizontal).query(horizontal, k=k)[0][:, 1:], 6))
+        for radius in distances[distances >= min_distance]:
+            radius = float(radius) + 1e-5
+            groups = np.asarray(plan_takeoff(pts, min_distance=radius), dtype=int)
+            if groups.max() + 1 >= min_waves:
+                break
+    if groups.max(initial=0) == 0:
+        return groups, 0.0
     pairs = np.array(sorted(cKDTree(horizontal).query_pairs(np.nextafter(min_distance, 0.0))))
+    if len(pairs) == 0:
+        return groups, 0.0
     pairs = pairs[groups[pairs[:, 0]] != groups[pairs[:, 1]]]
     closest = float(
         np.min(np.linalg.norm(horizontal[pairs[:, 0]] - horizontal[pairs[:, 1]], axis=1))
@@ -55,6 +76,7 @@ def plan_waves(
     max_acceleration: float,
     min_offset: float = 0.0,
     profile: str = "smooth",
+    sequential: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Schedules the climb of waves that leave the ground one after another.
 
@@ -62,7 +84,8 @@ def plan_waves(
     the heights should decrease by at least ``gap``). Wave ``k`` starts as
     soon as it stays at least ``gap`` below every earlier wave for the whole
     climb, and not earlier than ``min_offset`` seconds after the previous
-    wave.
+    wave. With ``sequential`` a wave starts only when the previous one has
+    finished (plus ``min_offset``).
 
     Returns the start time and the duration of every wave. Played backwards
     the same schedule is a landing: wave ``k`` touches down at
@@ -89,6 +112,8 @@ def plan_waves(
 
     for k in range(1, len(h)):
         lo = starts[k - 1] + min_offset
+        if sequential:
+            lo += durations[k - 1]
         hi = max(lo, float(np.max(starts[:k] + durations[:k])))
         starts[k] = lo
         if gap <= 0 or safe(k):
