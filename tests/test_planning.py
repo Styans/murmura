@@ -137,3 +137,31 @@ def test_safe_moves_resolve_grid_to_ring():
     plan, separation = plan_safe_moves(home, target, min_distance=2.0, duration_fn=durations)
     assert separation >= 2.0 - 1e-3
     assert plan.min_separation(dt=0.05) >= 2.0 - 2e-3
+
+
+def test_takeoff_layers_checkerboard():
+    from murmura.planning import takeoff_layers
+
+    xs, ys = np.meshgrid(np.arange(6) * 1.5, np.arange(6) * 1.5)
+    pts = np.column_stack([xs.ravel(), ys.ravel(), np.zeros(36)])
+    groups, gap = takeoff_layers(pts, min_distance=2.0)
+    assert groups.max() == 1
+    assert groups[0] != groups[1] and groups[0] == groups[7]
+    assert np.hypot(1.5, gap) >= 2.0
+    groups, gap = takeoff_layers(pts * 2, min_distance=2.0)
+    assert groups.max() == 0 and gap == 0.0
+
+
+def test_plan_waves_keeps_the_gap():
+    from murmura.planning import plan_waves, profile_progress
+
+    starts, durations = plan_waves([7.4, 6.0], gap=1.4, velocity=1.2, max_acceleration=3)
+    assert starts[0] == 0 and starts[1] > 0
+    t = np.linspace(starts[1], starts[1] + durations[1], 500)
+    z0 = 7.4 * profile_progress((t - starts[0]) / durations[0])
+    z1 = 6.0 * profile_progress((t - starts[1]) / durations[1])
+    assert np.all(z0 - z1 >= 1.4 - 1e-6)
+    # the next wave does not wait for the previous one to finish
+    assert starts[1] < durations[0]
+    spaced, _ = plan_waves([7.4, 6.0], gap=1.4, velocity=1.2, max_acceleration=3, min_offset=10)
+    assert spaced[1] == 10

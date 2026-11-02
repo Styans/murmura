@@ -7,7 +7,7 @@ YAML script, from Python, or inside Blender with the bundled add-on.
 > A *murmuration* is a flock of starlings moving as one. Murmura does the same for drones.
 
 ```text
- takeoff grid ──► layered takeoff ──► formations + transitions ──► staged return ──► sequenced landing
+ takeoff grid ──► takeoff in waves ──► formations + transitions ──► staged return ──► landing in waves
                                          │            │
                                    LED effects   safety checks ──► .skyc / CSV / PDF report
 ```
@@ -20,7 +20,7 @@ YAML script, from Python, or inside Blender with the bundled add-on.
 - **Collision-aware transitions** - optimal drone-to-point assignment, then the
   fastest safe plan among synchronised, *staggered* (per-drone start delays) and
   *lane-based* (temporary depth/altitude layers) transitions, verified by simulation.
-- **Takeoff and landing planning** - layered takeoff for dense grids, staged
+- **Takeoff and landing planning** - takeoff and landing in waves (checkerboard) that keep the minimum distance on dense pads, staged
   return-to-home, sequenced landing with spin-down time, smart RTH with neck paths.
 - **Formations** - grid, line, circle, polygon, star, heart, spiral, disc,
   rectangle, sphere, cube, torus, helix, text (Latin + Cyrillic bitmap font),

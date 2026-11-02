@@ -17,8 +17,8 @@ from .model import Audio, Cue, Drone, SafetyLimits, Show, ShowLocation
 from .planning import (
     match_points,
     min_transition_durations,
-    plan_landing,
-    plan_takeoff,
+    plan_waves,
+    takeoff_layers,
 )
 from .planning.transition import plan_safe_moves, synchronised_plan
 from .trajectory import Trajectory
@@ -332,29 +332,65 @@ class ShowBuilder:
         layer_spacing: float | None = None,
         color: Any = (80, 80, 80),
         duration: float | None = None,
+        climb_velocity: float | None = None,
     ) -> ShowBuilder:
         """Vertical takeoff from the home positions.
 
-        With ``layered`` takeoff, drones closer than the minimum distance to
-        each other are assigned to different altitude layers.
+        With ``layered`` takeoff, drones standing closer than the minimum
+        distance take off in waves (a checkerboard on a square grid): each
+        wave climbs to its own altitude layer, the first wave highest, and
+        starts only when the drones above it are far enough away. When the
+        pad spacing already respects the minimum distance, every drone takes
+        off at once.
+
+        The climb speed is ``climb_velocity`` (peak speed), derived from
+        ``duration`` when only that is given, and never above the limits.
         """
-        groups = (
-            np.asarray(plan_takeoff(self.home, min_distance=self.limits.min_distance))
-            if layered
-            else np.zeros(self.n, dtype=int)
+        if layered:
+            groups, gap = takeoff_layers(self.home, min_distance=self.limits.min_distance)
+        else:
+            groups, gap = np.zeros(self.n, dtype=int), 0.0
+        if layer_spacing is not None and gap > 0:
+            gap = max(gap, float(layer_spacing))
+        waves = int(groups.max(initial=0)) + 1
+        heights = altitude + (waves - 1 - np.arange(waves)) * gap
+        self.takeoff_altitudes = heights[groups]
+
+        m = self.speed_margin
+        kv = 1.5  # peak / average speed of the smooth profile
+        if climb_velocity is None:
+            climb_velocity = kv * altitude / duration if duration else float("inf")
+        limit_up = (self.limits.max_velocity_z_up or self.limits.max_velocity_z) * m
+        starts, durations = plan_waves(
+            heights,
+            gap=gap,
+            velocity=min(climb_velocity, limit_up),
+            max_acceleration=self.limits.max_acceleration_z * m,
         )
-        spacing = layer_spacing if layer_spacing is not None else self.limits.min_distance
-        targets = self.home.copy()
-        targets[:, 2] = self.home[:, 2] + altitude + groups * spacing
-        self.takeoff_altitudes = targets[:, 2] - self.home[:, 2]
 
         t0 = self.t
         self.cues.append(Cue(t0, tr("Takeoff")))
         self._set_colors(t0, np.array(parse_color(color), dtype=float), fade=False)
-        self._move_to(targets, duration=duration, stagger=False, label=tr("takeoff"))
-        self.segments["takeoff"] = (t0, self.t)
-        if groups.max() > 0:
-            self.log.append(tr("takeoff uses {count} altitude layers", count=int(groups.max()) + 1))
+        targets = self.home.copy()
+        targets[:, 2] += self.takeoff_altitudes
+        for i, traj in enumerate(self.trajectories):
+            k = groups[i]
+            traj.hold_until(t0 + starts[k])
+            traj.smooth_to(t0 + starts[k] + durations[k], targets[i])
+        end = t0 + float(np.max(starts + durations))
+        for traj in self.trajectories:
+            traj.hold_until(end)
+        self.positions = targets
+        self.t = end
+        self.segments["takeoff"] = (t0, end)
+        if waves > 1:
+            self.log.append(
+                tr(
+                    "takeoff in {count} waves, layers {gap:.1f} m apart",
+                    count=waves,
+                    gap=gap,
+                )
+            )
         return self
 
     def _move_to(
@@ -642,12 +678,15 @@ class ShowBuilder:
             hover = (
                 float(np.min(self.takeoff_altitudes)) if self.takeoff_altitudes is not None else 6.0
             )
-        groups = (
-            np.asarray(plan_takeoff(spots, min_distance=self.limits.min_distance))
-            if layered
-            else np.zeros(self.n, dtype=int)
-        )
-        lift = hover + groups * self.limits.min_distance
+        if layered:
+            groups, gap = takeoff_layers(spots, min_distance=self.limits.min_distance)
+        else:
+            groups, gap = np.zeros(self.n, dtype=int), 0.0
+        waves = int(groups.max(initial=0)) + 1
+        heights = hover + (waves - 1 - np.arange(waves)) * gap
+        # the same altitude layers as the takeoff: wave 0 highest
+        layer = (waves - 1 - groups) * gap
+        lift = heights[groups]
 
         if staging_spread:
             centre = spots.mean(axis=0)
@@ -656,7 +695,7 @@ class ShowBuilder:
                 float(np.mean(self.positions[:, 2])),
                 float(np.max(spots[:, 2] + lift)) + self.limits.min_distance,
             )
-            slots[:, 2] += groups * self.limits.min_distance
+            slots[:, 2] += layer
         else:
             slots = spots.copy()
             slots[:, 2] = spots[:, 2] + lift
@@ -670,7 +709,7 @@ class ShowBuilder:
             order = np.arange(self.n)
         else:
             raise ValueError("landing target must be 'nearest' or 'home'")
-        spots, slots, lift = spots[order], slots[order], lift[order]
+        spots, slots, lift, groups = spots[order], slots[order], lift[order], groups[order]
         above = spots.copy()
         above[:, 2] = spots[:, 2] + lift
 
@@ -682,28 +721,33 @@ class ShowBuilder:
             self._move_to(above, label=tr("approach"), stagger=False)
         self._set_colors(self.t, np.array(parse_color(color), dtype=float), fade=True)
 
-        # plan relative to each spot so that uneven ground is handled too
-        relative = above.copy()
-        relative[:, 2] = above[:, 2] - spots[:, 2]
-        starts, durations = plan_landing(
-            relative,
-            min_distance=self.limits.min_distance,
-            velocity=min(velocity, self.limits.max_velocity_z * self.speed_margin),
-            target_altitude=0.0,
-            spindown_time=spindown,
-            profile="smooth",
+        # the takeoff played backwards: the lowest wave lands first, the next
+        # one descends when it stays far enough above, neighbours touch down
+        # at least ``spindown`` seconds apart
+        m = self.speed_margin
+        climb, durations = plan_waves(
+            heights,
+            gap=gap,
+            velocity=min(velocity, self.limits.max_velocity_z * m),
+            max_acceleration=self.limits.max_acceleration_z * m,
+            min_offset=spindown if waves > 1 else 0.0,
         )
+        total = float(np.max(climb + durations))
         t1 = self.t
-        end = t1
         for i, traj in enumerate(self.trajectories):
-            touch = t1 + starts[i] + durations[i]
-            traj.hold_until(t1 + starts[i])
+            k = groups[i]
+            touch = t1 + total - climb[k]
+            traj.hold_until(touch - durations[k])
             traj.smooth_to(touch, spots[i])
             self.lights[i].add(touch, (0, 0, 0), False)
-            end = max(end, touch)
+        end = t1 + total
+        for traj in self.trajectories:
+            traj.hold_until(end)
         self.positions = spots
         self.t = end
         self.segments["landing"] = (t0, end)
+        if waves > 1:
+            self.log.append(tr("landing in {count} waves", count=waves))
         return self
 
     # ------------------------------------------------------------------

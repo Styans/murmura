@@ -47,11 +47,12 @@ def group_indices(settings, drones, group_name: str) -> np.ndarray | None:
 def _takeoff(builder, entry) -> None:
     altitude = entry.altitude if entry else DEFAULT_ALTITUDE
     climb = entry.climb_speed if entry else DEFAULT_CLIMB
-    # smooth climb whose peak speed is the chosen climb speed
+    # smooth climb whose peak speed is the chosen climb speed; drones closer
+    # than the minimum distance take off in waves
     builder.takeoff(
         altitude=altitude,
         layered=entry.layered if entry else True,
-        duration=1.5 * altitude / climb,
+        climb_velocity=climb,
         color=(80, 80, 80),
     )
 
@@ -61,6 +62,7 @@ def _land(settings, builder, entry) -> None:
         velocity=settings.landing_velocity,
         spindown=settings.spindown,
         target=entry.land_on if entry else "nearest",
+        layered=entry.layered if entry else True,
         staging_spread=settings.staging_spread if settings.staging_spread > 1.0 else None,
     )
 

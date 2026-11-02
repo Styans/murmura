@@ -36,7 +36,7 @@ auto_scale: false          # увеличивать фигуры плотнее 
 
 takeoff:                   # или false, чтобы начать шоу в воздухе
   altitude: 6
-  layered: true            # дроны ближе min_distance взлетают на разные высоты
+  layered: true            # дроны ближе min_distance взлетают по очереди (шахматкой)
   color: "#303030"
 
 scenes:

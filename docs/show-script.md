@@ -36,7 +36,7 @@ auto_scale: false           # enlarge formations that are denser than min_distan
 
 takeoff:                    # or `false` to start in the air
   altitude: 6
-  layered: true             # drones closer than min_distance climb to different layers
+  layered: true             # drones closer than min_distance take off in waves (checkerboard)
   color: "#303030"
 
 scenes:

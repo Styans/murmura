@@ -50,6 +50,16 @@ sub-panels.
    line below the button says whether the show is safe.
 4. **Export .skyc** on the *Murmura Export* tab.
 
+**Takeoff and landing in turns.** When drones stand closer than the minimum
+distance on the pad, *In turns* (on by default) splits them into waves whose
+drones are at least the minimum distance apart - a checkerboard on a square
+grid. The first wave climbs highest; the next one starts as soon as the
+drones above it are far enough away and stops one layer lower (the layer gap
+is just what keeps neighbours at the minimum distance). Landing plays the
+same plan backwards: the lowest layer lands first, neighbours touch down
+*Spin-down* seconds apart. A pad that already respects the minimum distance
+takes off all at once.
+
 The collapsed *Shape Generator* panel only creates a helper mesh (circle,
 heart, text, SVG...) that you then add with *Formation* like any object.
 On *Murmura LEDs*, *Object colours* use the points' `drone_color` attribute

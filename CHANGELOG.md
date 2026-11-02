@@ -2,8 +2,20 @@
 
 ## 0.1.1 - 2026-11-02
 
+Engine:
+
+- Takeoff and landing in waves: drones standing closer than the minimum
+  distance take off in turns (a checkerboard on a square pad), each wave to
+  its own altitude layer with just the gap needed, starting as soon as the
+  drones above it are far enough away. Landing is the same plan backwards
+  with *spindown* seconds between neighbouring touchdowns. The minimum
+  distance holds at every moment while drones are in the air.
+- `ShowBuilder.takeoff(climb_velocity=...)`; new `planning.takeoff_layers`
+  and `planning.plan_waves`.
+
 Blender add-on:
 
+- *In turns* option on takeoff and landing entries.
 - Simpler interface laid out like Skybrush Studio: three sidebar tabs -
   *Murmura* (drones and show), *Murmura LEDs* (lights, painting) and
   *Murmura Export* (safety, validation, export). Rarely used settings moved

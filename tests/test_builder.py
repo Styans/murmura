@@ -83,3 +83,57 @@ def test_csv_roundtrip():
     t = np.linspace(0, show.end_time, 200)
     for a, c in zip(show.drones, loaded.drones):
         assert np.max(np.abs(a.trajectory.position_at(t) - c.trajectory.position_at(t))) < 0.1
+
+
+def _closest_airborne(show, t0, t1, steps=400):
+    """Smallest distance between two drones that are both off the ground."""
+    times = np.linspace(t0, t1, steps)
+    pos = np.stack([d.trajectory.position_at(times) for d in show.drones], axis=1)
+    home = pos[0, :, 2]
+    worst = np.inf
+    for p in pos:
+        up = np.flatnonzero(p[:, 2] - home > 0.01)
+        if len(up) < 2:
+            continue
+        diff = p[up, None, :] - p[None, up, :]
+        dist = np.linalg.norm(diff, axis=-1) + np.eye(len(up)) * 1e9
+        worst = min(worst, float(dist.min()))
+    return worst
+
+
+def _wave_show(grid_spacing):
+    limits = SafetyLimits(min_distance=2)
+    b = ShowBuilder(36, limits=limits, grid_spacing=grid_spacing)
+    b.takeoff(altitude=6, climb_velocity=1.2)
+    b.scene("Ring", circle(36, radius=14, center=(0, 0, 25)), hold=2)
+    b.land(velocity=1.0, spindown=2.0)
+    return b, b.build()
+
+
+def test_takeoff_and_landing_in_waves_keep_the_minimum_distance():
+    b, show = _wave_show(grid_spacing=1.5)  # pad closer than the 2 m minimum
+    assert any("2 waves" in note for note in b.log)
+    t0, t1 = show.segments["takeoff"]
+    assert _closest_airborne(show, t0, t1) >= 2 - 1e-3
+    l0, l1 = show.segments["landing"]
+    assert _closest_airborne(show, l0, l1) >= 2 - 1e-3
+    assert validate_show(show).passed
+
+    # checkerboard: neighbours on the pad leave at different times
+    lift_off = []
+    for d in show.drones:
+        times = np.linspace(t0, t1, 2000)
+        z = d.trajectory.position_at(times)[:, 2]
+        lift_off.append(times[np.argmax(z > 0.01)])
+    lift_off = np.array(lift_off).reshape(6, 6)
+    assert len(np.unique(np.round(lift_off, 1))) == 2
+    assert lift_off[0, 0] != lift_off[0, 1] and lift_off[0, 0] == lift_off[1, 1]
+
+
+def test_takeoff_is_simultaneous_when_the_pad_is_spacious():
+    b, show = _wave_show(grid_spacing=3)
+    assert not any("waves" in note for note in b.log)
+    t0, t1 = show.segments["takeoff"]
+    times = np.linspace(t0, t1, 500)
+    first = [times[np.argmax(d.trajectory.position_at(times)[:, 2] > 0.01)] for d in show.drones]
+    assert np.ptp(first) < 1e-6

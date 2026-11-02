@@ -122,9 +122,11 @@ def _draw_entry(layout, s, entry):
     if entry.kind == "TAKEOFF":
         col.prop(entry, "altitude")
         col.prop(entry, "climb_speed")
+        col.prop(entry, "layered")
         return
     if entry.kind == "LAND":
         col.prop(entry, "land_on")
+        col.prop(entry, "layered")
         return
     if entry.source == "COLLECTION":
         col.prop(entry, "collection")
@@ -190,9 +192,7 @@ class MURMURA_PT_show_more(_Panel, bpy.types.Panel):
         entry = _active_entry(s)
         if entry is not None:
             col = layout.column(align=True)
-            if entry.kind == "TAKEOFF":
-                col.prop(entry, "layered")
-            elif entry.kind == "FORMATION":
+            if entry.kind == "FORMATION":
                 col.prop(entry, "source")
                 if (
                     entry.source == "VERTEX_GROUP"

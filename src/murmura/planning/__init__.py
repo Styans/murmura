@@ -15,6 +15,7 @@ from .transition import (
     profile_progress,
     stagger_transition,
 )
+from .waves import plan_waves, takeoff_layers
 
 __all__ = (
     "PROFILES",
@@ -30,7 +31,9 @@ __all__ = (
     "plan_smart_rth",
     "plan_takeoff",
     "plan_transition",
+    "plan_waves",
     "profile_progress",
     "stagger_transition",
     "synchronized_clearance",
+    "takeoff_layers",
 )

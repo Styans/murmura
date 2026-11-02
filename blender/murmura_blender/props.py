@@ -183,8 +183,11 @@ class MURMURA_StoryboardEntry(bpy.types.PropertyGroup):
         unit="VELOCITY",
     )
     layered: BoolProperty(
-        name="Layers",
-        description="Drones standing closer than the minimum distance climb to different heights",
+        name="In turns",
+        description=(
+            "Drones standing closer than the minimum distance take off and land in turns "
+            "(checkerboard): one wave climbs, then the next, each to its own height"
+        ),
         default=True,
     )
     land_on: EnumProperty(name="Land on", items=LAND_ON, default="nearest")
