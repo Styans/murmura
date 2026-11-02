@@ -114,7 +114,7 @@ murmura build examples/hello.yaml -o hello.skyc --report hello.pdf
 ## Blender add-on
 
 ```bash
-python blender/build_addon.py        # -> dist/murmura-blender-0.1.0.zip
+python blender/build_addon.py        # -> dist/murmura-blender-0.1.1.zip
 ```
 
 Install the zip in Blender 4.2+ via *Edit → Preferences → Get Extensions →

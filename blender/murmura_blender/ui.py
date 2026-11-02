@@ -2,9 +2,12 @@
 
 import bpy
 
+from . import bl_info
 from . import scene as sc
 from .i18n import localize, tr
 from .prefs import preferences
+
+ADDON_VERSION = ".".join(map(str, bl_info["version"]))
 
 KIND_ICONS = {
     "TAKEOFF": "TRIA_UP_BAR",
@@ -40,6 +43,7 @@ class MURMURA_PT_swarm(_Panel, bpy.types.Panel):
         s = context.scene.murmura
         layout = self.layout
         prefs = preferences()
+        layout.label(text=f"Murmura {ADDON_VERSION}")
         if prefs is not None:
             layout.prop(prefs, "language", text=tr("Language"))
         count = _drone_count()
@@ -69,15 +73,45 @@ class MURMURA_PT_swarm(_Panel, bpy.types.Panel):
         row.operator("murmura.group_select", text=tr("Select"), icon="RESTRICT_SELECT_OFF")
 
 
+SOURCE_ICONS = {
+    "OBJECT": "OBJECT_DATA",
+    "VERTEX_GROUP": "GROUP_VERTEX",
+    "COLLECTION": "OUTLINER_COLLECTION",
+}
+
+
 class MURMURA_PT_formations(_Panel, bpy.types.Panel):
     bl_label = "Formations"
     bl_idname = "MURMURA_PT_formations"
+
+    def draw(self, context):
+        s = context.scene.murmura
+        layout = self.layout
+        col = layout.column(align=True)
+        col.label(text=tr("1. Select an object, several objects,"), icon="RESTRICT_SELECT_OFF")
+        col.label(text=tr("   a collection or vertices (Tab)."))
+        col.label(text=tr("2. Press the button - drones will fly to its points."))
+        big = layout.row()
+        big.scale_y = 1.6
+        big.operator("murmura.add_selection", text=tr("Add Selected as Formation"), icon="ADD")
+        formations = [e for e in s.storyboard if e.kind == "FORMATION"]
+        if formations:
+            box = layout.box()
+            for e in formations:
+                box.label(text=e.name, icon=SOURCE_ICONS.get(e.source, "DOT"))
+            layout.label(text=tr("Order, timing and lights: Storyboard."), icon="INFO")
+
+
+class MURMURA_PT_shape_generator(_Panel, bpy.types.Panel):
+    bl_label = "Generate Shape Mesh"
+    bl_idname = "MURMURA_PT_shape_generator"
+    bl_parent_id = "MURMURA_PT_formations"
     bl_options = {"DEFAULT_CLOSED"}
 
     def draw(self, context):
         s = context.scene.murmura
         layout = self.layout
-        layout.label(text=tr("Any mesh can be a formation: one vertex per drone."), icon="INFO")
+        layout.label(text=tr("Creates a new mesh; then add it as a formation."), icon="INFO")
         layout.prop(s, "shape")
         col = layout.column(align=True)
         if s.shape == "text":
@@ -89,7 +123,7 @@ class MURMURA_PT_formations(_Panel, bpy.types.Panel):
             col.prop(s, "plane")
         layout.prop(s, "center")
         layout.prop(s, "auto_scale")
-        layout.operator("murmura.add_formation", icon="OUTLINER_OB_POINTCLOUD")
+        layout.operator("murmura.add_formation", icon="MESH_DATA")
 
 
 class MURMURA_UL_storyboard(bpy.types.UIList):
@@ -273,6 +307,7 @@ CLASSES = (
     MURMURA_UL_storyboard,
     MURMURA_PT_swarm,
     MURMURA_PT_formations,
+    MURMURA_PT_shape_generator,
     MURMURA_PT_storyboard,
     MURMURA_PT_safety,
     MURMURA_PT_export,

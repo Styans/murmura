@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.1 - 2026-11-02
+
+Blender add-on:
+
+- The *Formations* panel now turns the selection into a formation: one or
+  several objects, vertices in Edit Mode, or the collection active in the
+  Outliner. It reports the number of points and drones.
+- The shape generator moved to a collapsed *Generate Shape Mesh* sub-panel;
+  its button is now *Create Shape Mesh*.
+- The installed version is shown at the top of the *Swarm* panel.
+
 ## 0.1.0 - 2026-10-30
 
 First public release.

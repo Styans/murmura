@@ -76,7 +76,7 @@ murmura preview hello.skyc
 ## Аддон для Blender
 
 ```bash
-python blender/build_addon.py        # -> dist/murmura-blender-0.1.0.zip
+python blender/build_addon.py        # -> dist/murmura-blender-0.1.1.zip
 ```
 
 Установка в Blender 4.2+: *Edit → Preferences → Get Extensions* → меню в правом

@@ -103,6 +103,7 @@ def check_languages(addon, ctx):
     addon.reload_language()
     entry_rna = props.MURMURA_StoryboardEntry.bl_rna
     check(ops_story.MURMURA_OT_recalculate.bl_label == "Пересчитать шоу", "Russian operator labels")
+    check(ops.MURMURA_OT_add_formation.bl_label == "Создать меш-фигуру", "shape generator label")
     check(entry_rna.properties["hold"].name == "Удержание", "Russian property names")
     check(
         entry_rna.properties["effect"].enum_items["rainbow"].name == "Радуга", "Russian enum items"
@@ -145,6 +146,16 @@ def check_panels(ctx):
                     if issubclass(cls, bpy.types.Panel):
                         cls.draw(SimpleNamespace(layout=LayoutProbe(drawn)), ctx)
     check(len(drawn) > 100, f"all panels draw for every shape / effect ({len(set(drawn))} widgets)")
+    formations: list[str] = []
+    ui.MURMURA_PT_formations.draw(SimpleNamespace(layout=LayoutProbe(formations)), ctx)
+    check(
+        formations == ["murmura.add_selection"],
+        "Formations panel: one button, formation from the selection",
+    )
+    check(
+        ui.MURMURA_PT_shape_generator.bl_parent_id == "MURMURA_PT_formations",
+        "shape generator is a sub-panel",
+    )
 
 
 def main():
@@ -202,6 +213,34 @@ def main():
     sb[2].effect, sb[2].hold = "object", 4.0
     sb[3].effect, sb[3].hold = "wave", 4.0
     check(len(sb) == 4 and sb[3].target == big, "storyboard has 4 entries")
+    check(
+        sb[0].source == "OBJECT" and sb[0].target == ring,
+        "the selected object itself becomes the formation",
+    )
+
+    # nothing selected: the collection active in the Outliner is the formation
+    group = bpy.data.collections.new("Points group")
+    scene.collection.children.link(group)
+    group.objects.link(big)
+    for other in ctx.view_layer.objects:
+        other.select_set(False)
+    layer_coll = ctx.view_layer.layer_collection.children[group.name]
+    ctx.view_layer.active_layer_collection = layer_coll
+    check(bpy.ops.murmura.add_selection() == {"FINISHED"}, "formation from the active collection")
+    check(
+        sb[s.storyboard_index].source == "COLLECTION"
+        and sb[s.storyboard_index].collection == group,
+        "collection formation stored",
+    )
+    bpy.ops.murmura.storyboard_remove()
+    ctx.view_layer.active_layer_collection = ctx.view_layer.layer_collection
+    try:
+        bpy.ops.murmura.add_selection()
+        refused = False
+    except RuntimeError:
+        refused = True
+    check(refused, "nothing selected: clear error")
+    check(len(sb) == 4, "storyboard back to 4 entries")
 
     # build
     t0 = time.perf_counter()

@@ -82,10 +82,10 @@ class MURMURA_OT_select_drones(bpy.types.Operator):
 
 
 class MURMURA_OT_add_formation(bpy.types.Operator):
-    """Create a formation with one point per drone"""
+    """Create a new mesh with one point per drone (then add it as a formation)"""
 
     bl_idname = "murmura.add_formation"
-    bl_label = "Add Formation"
+    bl_label = "Create Shape Mesh"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):

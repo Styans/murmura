@@ -4,7 +4,7 @@ Design formations, plan collision-aware transitions, compose LED programs
 and export compiled ``.skyc`` show files.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from .choreo import Motion, ShowBuilder
 from .effects import make_effect

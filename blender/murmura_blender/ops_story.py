@@ -98,11 +98,19 @@ class MURMURA_OT_add_selection(bpy.types.Operator):
             if o not in drones and not o.name.endswith(" marker")
         ]
         if not chosen:
-            self.report({"ERROR"}, tr("Select a mesh with the target points first"))
-            return {"CANCELLED"}
+            # nothing selected: the collection active in the Outliner
+            coll = context.view_layer.active_layer_collection.collection
+            if coll is context.scene.collection or coll.name == sc.DRONES_COLLECTION:
+                self.report({"ERROR"}, tr("Select a mesh with the target points first"))
+                return {"CANCELLED"}
+            entry = _insert_entry(s, "FORMATION", coll.name)
+            entry.source, entry.collection = "COLLECTION", coll
+            self._report_points(context, entry, drones)
+            return {"FINISHED"}
         if len(chosen) == 1:
             entry = _insert_entry(s, "FORMATION", chosen[0].name)
             entry.source, entry.target = "OBJECT", chosen[0]
+            self._report_points(context, entry, drones)
             return {"FINISHED"}
 
         parent = sc.ensure_collection(FORMATIONS_PARENT)
@@ -113,8 +121,27 @@ class MURMURA_OT_add_selection(bpy.types.Operator):
         entry = _insert_entry(s, "FORMATION", coll.name)
         entry.source, entry.collection = "COLLECTION", coll
         entry.target = obj if obj in chosen else chosen[0]
-        self.report({"INFO"}, tr("Formation from {count} objects", count=len(chosen)))
+        self._report_points(context, entry, drones)
         return {"FINISHED"}
+
+    def _report_points(self, context, entry, drones) -> None:
+        try:
+            points, _ = sc.entry_points(context, entry, drones)
+        except ValueError as ex:
+            self.report({"WARNING"}, str(ex))
+            return
+        count, available = len(points), len(drones)
+        text = tr(
+            "Formation '{name}': {points} points, {drones} drones",
+            name=entry.name,
+            points=count,
+            drones=available,
+        )
+        if available and count > available:
+            text += " - " + tr("an even subset of points will be used")
+        elif count < available:
+            text += " - " + tr("{count} drones will wait with lights off", count=available - count)
+        self.report({"INFO"}, text)
 
 
 class MURMURA_OT_storyboard_remove(bpy.types.Operator):

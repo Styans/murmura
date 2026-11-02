@@ -2,21 +2,22 @@
 
 Sidebar tab "Murmura" in the 3D viewport:
 
-* Drones - create a takeoff grid of drones lit by their object colour
-* Formations - generate formations (shapes, text, SVG, images) or use any mesh
+* Swarm - create a takeoff grid of drones lit by their object colour; groups
+* Formations - turn the selected objects, vertices or collection into a
+  formation (a shape mesh generator is in a sub-panel)
 * Storyboard - order formations, hold times, light effects and motions, then
-  build the show: takeoff, collision-aware transitions and landing are baked
-  as keyframes onto the drones
-* Safety & Export - validate the animation and export / import ``.skyc`` files
+  recalculate the show: takeoff, collision-aware transitions and landing are
+  baked as keyframes onto the drones
+* Safety, Export - validate the animation and export / import ``.skyc`` files
 
 The interface is available in English and Russian (see the add-on
-preferences or the language selector in the Drones panel).
+preferences or the language selector in the Swarm panel).
 """
 
 bl_info = {
     "name": "Murmura",
     "author": "Murmura contributors",
-    "version": (0, 1, 0),
+    "version": (0, 1, 1),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Murmura",
     "description": "Drone show choreography with collision-aware transitions and .skyc export",

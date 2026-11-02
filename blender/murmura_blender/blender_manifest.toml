@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "murmura"
-version = "0.1.0"
+version = "0.1.1"
 name = "Murmura"
 tagline = "Drone show choreography and .skyc export"
 maintainer = "Murmura contributors"
