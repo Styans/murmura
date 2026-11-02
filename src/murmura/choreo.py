@@ -981,15 +981,23 @@ class ShowBuilder:
         self.cues.append(Cue(t0, tr("Landing")))
         self._anchor_colors()
         label = tr("return")
-        if self.n > 1:
-            spacing = float(np.min(KDTree(self.positions).query(self.positions, k=2)[0][:, 1]))
-            if spacing < need:
-                centre = np.array(
-                    [*self.positions[:, :2].mean(axis=0), float(self.positions[:, 2].min())]
-                )
-                scale = need / max(spacing, 1e-6)
-                wide = centre + (self.positions - centre) * scale
-                self._move_to(wide, stagger=False, label=label)
+        # breathe out: the formation and the drones waiting above the pad (not
+        # in the formation) each scale up about their own base until their
+        # spacing allows a safe synchronised morph
+        waiting = np.zeros(self.n, dtype=bool)
+        if self.takeoff_altitudes is not None:
+            hover_points = self.home.copy()
+            hover_points[:, 2] += self.takeoff_altitudes
+            waiting = np.linalg.norm(self.positions - hover_points, axis=1) < 1e-3
+        wide = self.positions.copy()
+        for group in (np.flatnonzero(~waiting), np.flatnonzero(waiting)):
+            wide[group] = _breathe_out(self.positions[group], need)
+        start = float(np.min(KDTree(self.positions).query(self.positions, k=2)[0][:, 1]))
+        if synchronized_clearance(self.positions, wide)[0] < min(d, start) - 1e-3:
+            # the groups would grow into each other: scale everything together
+            wide = _breathe_out(self.positions, need)
+        if not np.allclose(wide, self.positions):
+            self._move_to(wide, stagger=False, label=label)
         mapping = match_points(self.positions, air)
         order = np.zeros(self.n, dtype=int)
         for slot, drone in enumerate(mapping):
@@ -1038,6 +1046,19 @@ class ShowBuilder:
             audio=self.audio,
             location=self.location,
         )
+
+
+def _breathe_out(points: np.ndarray, spacing: float) -> np.ndarray:
+    """Scales ``points`` up about the centre of their base (their lowest
+    altitude) until their closest pair is ``spacing`` apart; uniform scaling
+    only increases distances and never lowers the base."""
+    if len(points) < 2:
+        return points.copy()
+    closest = float(np.min(KDTree(points).query(points, k=2)[0][:, 1]))
+    if closest >= spacing:
+        return points.copy()
+    centre = np.array([*points[:, :2].mean(axis=0), float(points[:, 2].min())])
+    return centre + (points - centre) * (spacing / max(closest, 1e-6))
 
 
 class _KeepColors(Effect):
