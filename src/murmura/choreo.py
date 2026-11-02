@@ -251,6 +251,9 @@ class ShowBuilder:
         self.audio: Audio | None = None
         self.location: ShowLocation | None = None
         self.takeoff_altitudes: np.ndarray | None = None
+        # after a formation that followed a model: point of every drone
+        # (-1: none) and its offset from the point
+        self.bound: tuple[np.ndarray, np.ndarray] | None = None
         self.log: list[str] = []
 
     # ------------------------------------------------------------------
@@ -558,6 +561,7 @@ class ShowBuilder:
         Returns the target point index of each drone (-1 when it has none).
         """
         pts = np.asarray(points, dtype=float).reshape(-1, 3)
+        self.bound = None  # a new formation ends any binding to a model
         group = np.arange(self.n) if drones is None else np.asarray(drones, dtype=int)
         if len(pts) > len(group):
             raise ValueError(
@@ -697,6 +701,7 @@ class ShowBuilder:
                 traj.extend_with_samples(t0 + times, path[:, i, :], tolerance=self.fit_tolerance)
             traj.hold_until(t0 + times[-1])
         self.positions = path[-1].copy()
+        self.bound = (slot, base - frames[0][np.maximum(slot, 0)])
 
         def sampler(sample_times):
             rel = np.clip(np.asarray(sample_times, dtype=float) - t0, times[0], times[-1])
@@ -799,6 +804,7 @@ class ShowBuilder:
         style: str = "dissolve",
         order: str = "random",
         interval: float = 0.15,
+        follow: tuple[np.ndarray, np.ndarray] | None = None,
     ) -> ShowBuilder:
         """Returns every drone above a landing spot and lands the swarm.
 
@@ -828,6 +834,11 @@ class ShowBuilder:
         :meth:`_land_morph`). Both take the nearest free spots, so ``target``
         does not apply to them; ``style="direct"`` flies the return described
         above.
+
+        ``follow = (times, frames)`` keeps the drones of the last formation
+        that followed a model bound to it during a ``dissolve`` return: until
+        it leaves, every drone keeps following its point (``frames[k, p]`` at
+        ``times[k]`` seconds after the return starts).
         """
         if style not in ("dissolve", "morph", "direct"):
             raise ValueError("return style must be 'dissolve', 'morph' or 'direct'")
@@ -845,6 +856,7 @@ class ShowBuilder:
                 color=color,
                 order=order,
                 interval=interval,
+                follow=follow,
             )
         if style == "morph":
             return self._land_morph(
@@ -995,6 +1007,21 @@ class ShowBuilder:
         hover_points[:, 2] += self.takeoff_altitudes
         return np.linalg.norm(self.positions - hover_points, axis=1) < 1e-3
 
+    def _return_track(self, follow) -> tuple[np.ndarray, np.ndarray] | None:
+        """Positions of every drone during the return while it still follows
+        the model, or ``None``."""
+        if follow is None or self.bound is None:
+            return None
+        times = np.asarray(follow[0], dtype=float)
+        points = np.asarray(follow[1], dtype=float)
+        slot, offset = self.bound
+        frames = np.repeat(self.positions[None], len(times), axis=0)
+        tied = slot >= 0
+        frames[:, tied] = points[:, slot[tied]] + offset[tied][None]
+        # continue exactly where the binding left the drones
+        frames += (self.positions - frames[0])[None]
+        return times, frames
+
     def _land_dissolve(
         self,
         *,
@@ -1004,6 +1031,7 @@ class ShowBuilder:
         color: Any,
         order: str,
         interval: float,
+        follow: tuple[np.ndarray, np.ndarray] | None = None,
     ) -> ShowBuilder:
         """The formation falls apart drone by drone like sakura petals: each
         drone leaves on its turn, flies straight to its point above a free
@@ -1016,6 +1044,10 @@ class ShowBuilder:
         so that every pair keeps the minimum distance (see
         :func:`~murmura.planning.plan_dissolve`); if that fails the swarm
         re-forms and lands row by row instead.
+
+        With ``follow`` (see :meth:`land`) the drones still in the formation
+        keep following the animated model until they leave, and the formation
+        does not breathe out.
         """
         d = self.limits.min_distance
         need = float(np.sqrt(2.0) * d * 1.02)
@@ -1027,10 +1059,12 @@ class ShowBuilder:
 
         waiting = self._waiting_above_pad()
         flying = np.flatnonzero(~waiting)
-        wide = self.positions.copy()
-        wide[flying] = _breathe_out(self.positions[flying], need)
-        if not np.allclose(wide, self.positions):
-            self._move_to(wide, stagger=False, label=label)
+        track = self._return_track(follow)
+        if track is None:
+            wide = self.positions.copy()
+            wide[flying] = _breathe_out(self.positions[flying], need)
+            if not np.allclose(wide, self.positions):
+                self._move_to(wide, stagger=False, label=label)
 
         start = self.positions.copy()
         above = start.copy()  # drones not in the formation land from where they are
@@ -1045,7 +1079,7 @@ class ShowBuilder:
             above,
             ground,
             min_distance=d,
-            flight_durations=self._duration_fn(self.profile)(above - start),
+            duration_fn=self._duration_fn(self.profile),
             landing_velocity=min(velocity, self.limits.max_velocity_z * m),
             max_acceleration_z=self.limits.max_acceleration_z * m,
             airborne_altitude=self.limits.min_nav_altitude,
@@ -1053,6 +1087,7 @@ class ShowBuilder:
             order=order,
             interval=interval,
             first=waiting,
+            track=track,
         )
         if not plan.complete:
             self.log.append(
@@ -1073,8 +1108,14 @@ class ShowBuilder:
             leave = t1 + float(plan.departures[i])
             arrive = leave + float(plan.flight[i])
             touch = arrive + float(plan.descent[i])
+            if track is not None and np.any(track[1][:, i] != track[1][0, i]):
+                # still bound to the model until it leaves
+                times = np.append(track[0][track[0] < plan.departures[i]], plan.departures[i])
+                if len(times) > 1:
+                    way = plan.waiting(np.array([i]), times)[0]
+                    traj.extend_with_samples(t1 + times, way, tolerance=self.fit_tolerance)
             traj.hold_until(leave)
-            if plan.flight[i] > 0 and not np.allclose(start[i], above[i], atol=1e-6):
+            if plan.flight[i] > 0 and not np.allclose(plan.start[i], above[i], atol=1e-6):
                 traj.smooth_to(arrive, above[i])
             traj.smooth_to(touch, ground[i])
             self.lights[i].add(arrive, dark, True)

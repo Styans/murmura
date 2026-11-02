@@ -282,6 +282,8 @@ RU: dict[str, str] = {
     "From": "С кадра",
     "To": "По кадр",
     "Binding length": "Длительность привязки",
+    "Keep bound until leaving": "Держать привязку до отлёта",
+    "During a Sakura petals return the drones still in the figure keep following the animated model until each of them leaves": "Во время возврата «Лепестки сакуры» дроны, ещё не улетевшие из фигуры, продолжают следовать за анимированной моделью, пока каждый не улетит",
     "Bind at Arrival": "Привязать с момента прилёта",
     "Bind the drones to the vertices from the moment they arrive (recalculate to apply)": "Привязать дронов к вершинам с момента прилёта (применится при пересчёте)",
     "'{name}': the number of vertices changes during the binding ({before} -> {after}); drones can only follow a mesh with fixed vertices": "«{name}»: во время привязки меняется число вершин ({before} -> {after}); дроны могут следовать только за мешем с постоянными вершинами",

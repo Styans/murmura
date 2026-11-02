@@ -291,3 +291,30 @@ def test_too_fast_model_animation_is_reported():
     frames = pts[None] + np.array([30.0, 0.0, 0.0]) * times[:, None, None]  # 30 m/s
     b.scene("Fast", frames[0], track=(times, frames))
     assert any("faster than the drones" in note for note in b.log)
+
+
+def test_drones_stay_bound_to_the_model_until_they_leave():
+    limits = SafetyLimits(min_distance=2)
+    b = ShowBuilder(24, limits=limits, grid_spacing=3)
+    b.takeoff(altitude=6)
+    ring = circle(24, radius=12, center=(0, 0, 0), plane="xy")
+
+    def model(t):  # the model keeps drifting sideways at 0.5 m/s
+        return ring + np.array([0.5 * t, 30.0, 25.0])
+
+    times = np.linspace(0.0, 4.0, 41)
+    b.scene("Ring", model(0.0), track=(times, np.array([model(t) for t in times])))
+    back = np.linspace(0.0, 120.0, 1201)
+    later = np.array([model(4.0 + t) for t in back])
+    t_return = b.t
+    b.land(style="dissolve", order="random", interval=1.0, follow=(back, later))
+    show = b.build()
+    assert validate_show(show).passed
+    # some drone that has not left yet after 10 s is still on its moving point
+    t = t_return + 10.0
+    pos = np.array([d.trajectory.position_at([t])[0] for d in show.drones])
+    on_model = np.linalg.norm(pos[:, None] - model(14.0)[None], axis=2).min(axis=1) < 0.05
+    assert on_model.sum() >= 5
+    # ... and nobody stays on the model frozen where the binding ended
+    frozen = np.linalg.norm(pos[:, None] - model(4.0)[None], axis=2).min(axis=1) < 0.05
+    assert not frozen.any()

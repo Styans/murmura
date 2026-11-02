@@ -58,6 +58,9 @@ def main():
     obj.rotation_euler = (0, 0, math.radians(30))
     obj.keyframe_insert("location", frame=840)
     obj.keyframe_insert("rotation_euler", frame=840)
+    # ... and keeps drifting slowly while the drones go home
+    obj.location = (20, 30, 29)
+    obj.keyframe_insert("location", frame=2040)
 
     for o in ctx.view_layer.objects:
         o.select_set(False)
@@ -103,7 +106,25 @@ def main():
     check(np.median(after[:, 0] - before[:, 0]) > 5, "the swarm moved with the model")
     check(all(line.ok for line in s.report if "[" in line.text), "safety check passed")
 
-    # 3. back to automatic
+    # 3. during the return the drones still in the figure stay on the model
+    landing = s.storyboard[-1] if s.storyboard[-1].kind == "LAND" else None
+    check(entry.follow_until_leaving, "drones stay bound until they leave (default)")
+    check(
+        any("one by one" in line.text or "по одному" in line.text for line in s.report),
+        "sakura petals return",
+    )
+    bound_late = 0
+    for frame in range(900, 1300, 40):
+        scene.frame_set(frame)
+        target = vertices(obj)
+        pos = np.array([tuple(d.matrix_world.translation) for d in drones])
+        on = np.linalg.norm(pos[:, None] - target[None], axis=2).min(axis=1) < 0.1
+        if 0 < on.sum() < N:
+            bound_late += 1
+    check(bound_late >= 2, f"drones not yet gone follow the moving model ({bound_late} checks)")
+    del landing
+
+    # 4. back to automatic
     bpy.ops.murmura.follow_auto()
     check(not entry.follow_manual, "binding back to the arrival")
 

@@ -148,6 +148,7 @@ def _draw_entry(layout, s, entry):
         row.operator("murmura.follow_auto", text="", icon="TIME")
         if not entry.follow_manual:
             sub.prop(entry, "hold", text=tr("Binding length"))
+        sub.prop(entry, "follow_until_leaving")
 
 
 class MURMURA_PT_show(_Panel, bpy.types.Panel):

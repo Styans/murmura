@@ -58,7 +58,10 @@ frame by frame. Recalculating puts two markers on the timeline, *▶ name* and
 for *Binding length* seconds); drag them, or type the frames, and recalculate
 to bind the drones to another part of the animation. The drones fly to the
 vertices as they will be at the binding start, so nothing jumps; the report
-warns if the model moves faster than the drones may fly.
+warns if the model moves faster than the drones may fly. With *Keep bound
+until leaving* (on by default) a following *Sakura petals* return keeps the
+drones that have not left yet on the moving model; each one leaves from
+wherever its vertex is at that moment.
 
 **Takeoff and landing in turns.** When drones stand closer than the minimum
 distance on the pad, *In turns* (on by default) splits them into waves whose

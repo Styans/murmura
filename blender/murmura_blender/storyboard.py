@@ -124,6 +124,44 @@ def _follow_track(context, entry, drones, index, start: int, end: int, count: in
     return times, np.array(frames)
 
 
+def _last_keyframe() -> float:
+    """The last keyframe of any animation in the file (0 without any)."""
+    import bpy
+
+    ends = [action.frame_range[1] for action in bpy.data.actions]
+    return max(ends, default=0.0)
+
+
+def _return_track(context, follow, drones, builder, interval: float):
+    """Positions of the bound points after the binding ends, sampled while
+    the drones may still be in the figure (5 times a second, until the model
+    has been still for 3 s after its last keyframe)."""
+    entry, index, count, end_frame = follow
+    scene = context.scene
+    fps = scene.render.fps / scene.render.fps_base
+    step = max(1, int(round(fps / 5)))
+    window = min(300.0, builder.n * interval * 2.0 + 60.0)
+    last_key = _last_keyframe()
+    times, frames, still = [], [], 0
+    for frame in range(end_frame, end_frame + int(window * fps) + 1, step):
+        scene.frame_set(frame)
+        points, _ = sc.entry_points(context, entry, drones)
+        if len(points) != count:
+            break
+        points = points[index]
+        if frames and np.allclose(points, frames[-1], atol=1e-4):
+            still += 1
+            if still * step >= 3 * fps and frame > last_key:
+                break
+        else:
+            still = 0
+        times.append((frame - end_frame) / fps)
+        frames.append(points)
+    if len(times) < 2:
+        return None
+    return np.array(times), np.array(frames)
+
+
 def _takeoff(builder, entry) -> None:
     altitude = entry.altitude if entry else DEFAULT_ALTITUDE
     climb = entry.climb_speed if entry else DEFAULT_CLIMB
@@ -138,7 +176,7 @@ def _takeoff(builder, entry) -> None:
     )
 
 
-def _land(settings, builder, entry) -> None:
+def _land(settings, builder, entry, follow=None) -> None:
     builder.land(
         velocity=settings.landing_velocity,
         spindown=settings.spindown,
@@ -148,6 +186,7 @@ def _land(settings, builder, entry) -> None:
         style=entry.return_style if entry else "dissolve",
         order=entry.petal_order if entry else "random",
         interval=entry.petal_interval if entry else 0.15,
+        follow=follow,
     )
 
 
@@ -191,6 +230,15 @@ def _recalculate(context):
     )
     first_takeoff = next((e for e in s.storyboard if e.kind == "TAKEOFF"), None)
     airborne = False
+    bound = None  # the last formation if its drones stay bound to the model
+
+    def landing(entry):
+        style = entry.return_style if entry else "dissolve"
+        follow = None
+        if bound is not None and style == "dissolve":
+            interval = entry.petal_interval if entry else 0.15
+            follow = _return_track(context, bound, drones, builder, interval)
+        _land(s, builder, entry, follow)
 
     for entry in s.storyboard:
         t_start = builder.t
@@ -242,8 +290,10 @@ def _recalculate(context):
                 track = _follow_track(context, entry, drones, index, f0, f1, count)
                 track_start = (f0 - scene.frame_start) / fps
                 scene.frame_set(f0)
+                bound = (entry, index, count, f1) if entry.follow_until_leaving else None
             else:
                 points, colors, index = _formation_points(context, entry, drones, size)
+                bound = None
             if len(points) == 0:
                 raise ValueError(tr("'{name}': no points found", name=entry.name))
             if len(points) < size:
@@ -286,14 +336,15 @@ def _recalculate(context):
         elif entry.kind == "LAND":
             if not airborne:
                 continue
-            _land(s, builder, entry)
+            landing(entry)
             airborne = False
+            bound = None
 
         entry.frame_start = scene.frame_start + int(round(t_start * fps))
         entry.frame_end = scene.frame_start + int(round(builder.t * fps))
 
     if airborne:
-        _land(s, builder, None)
+        landing(None)
         builder.log.append(tr("Landing added automatically at the end"))
 
     return builder.build(), builder

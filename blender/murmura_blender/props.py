@@ -234,6 +234,14 @@ class MURMURA_StoryboardEntry(bpy.types.PropertyGroup):
         default=0,
         update=_follow_frames_changed,
     )
+    follow_until_leaving: BoolProperty(
+        name="Keep bound until leaving",
+        description=(
+            "During a Sakura petals return the drones still in the figure keep following "
+            "the animated model until each of them leaves"
+        ),
+        default=True,
+    )
     follow_manual: BoolProperty(default=False)
     follow_markers: StringProperty(default="")
     motion_rate: FloatProperty(name="Rate", default=2.0, min=0.0)

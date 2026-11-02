@@ -46,7 +46,9 @@ Blender add-on:
 - *Follow vertices* on formations: once the drones arrive they follow the
   vertices of the animated model frame by frame. The binding range appears on
   the timeline as a pair of markers that can be dragged; recalculating picks
-  up the new range.
+  up the new range. With *Keep bound until leaving* the drones stay on the
+  model during a *Sakura petals* return until each of them leaves
+  (`land(follow=...)`).
 - *In turns* option on takeoff and landing entries.
 - Landing defaults to *Own spot*; the *Return spread* setting was removed.
 - Landing options: *Return* (*Sakura petals* / *Re-form into homes* /

@@ -30,7 +30,7 @@ DISSOLVE_ORDERS = ("random", "top", "bottom", "outside", "front")
 
 @dataclass
 class DissolvePlan:
-    start: np.ndarray  # (n, 3) formation points
+    start: np.ndarray  # (n, 3) points the drones leave from
     above: np.ndarray  # (n, 3) points above the landing spots
     ground: np.ndarray  # (n, 3) landing spots
     departures: np.ndarray  # (n,)
@@ -38,6 +38,7 @@ class DissolvePlan:
     descent: np.ndarray  # (n,) duration of the descent
     complete: bool  # every drone found a safe departure
     failure: str = ""
+    track: tuple[np.ndarray, np.ndarray] | None = None  # motion before leaving
 
     @property
     def touchdowns(self) -> np.ndarray:
@@ -47,18 +48,40 @@ class DissolvePlan:
     def total_duration(self) -> float:
         return float(np.max(self.touchdowns, initial=0.0))
 
+    def waiting(self, idx: np.ndarray, times: np.ndarray) -> np.ndarray:
+        """Where drones ``idx`` are before they leave: following ``track``
+        (clamped to its ends) or at ``start``; shape ``(len(idx), len(times), 3)``."""
+        return _waiting(self.track, self.start, np.asarray(idx), np.asarray(times, dtype=float))
+
     def positions(self, times: np.ndarray, idx: np.ndarray | None = None) -> np.ndarray:
         """Positions at ``times``, shape ``(len(idx), len(times), 3)``."""
         idx = np.arange(len(self.start)) if idx is None else np.asarray(idx)
-        return _positions(
+        times = np.asarray(times, dtype=float)
+        moving = _positions(
             self.start[idx],
             self.above[idx],
             self.ground[idx],
             self.departures[idx],
             self.flight[idx],
             self.descent[idx],
-            np.asarray(times, dtype=float),
+            times,
         )
+        if self.track is None:
+            return moving
+        before = times[None, :] < self.departures[idx][:, None]
+        return np.where(before[..., None], self.waiting(idx, times), moving)
+
+
+def _waiting(track, start, idx, times) -> np.ndarray:
+    if track is None:
+        return np.repeat(start[idx][:, None, :], len(times), axis=1)
+    t_track, frames = track
+    rel = np.clip(times, t_track[0], t_track[-1])
+    k = np.clip(np.searchsorted(t_track, rel), 1, len(t_track) - 1)
+    w = ((rel - t_track[k - 1]) / np.maximum(t_track[k] - t_track[k - 1], 1e-12))[None, :, None]
+    lo = np.swapaxes(frames[k - 1][:, idx], 0, 1)
+    hi = np.swapaxes(frames[k][:, idx], 0, 1)
+    return lo * (1 - w) + hi * w
 
 
 def _positions(a, b, g, dep, fly, down, t) -> np.ndarray:
@@ -104,7 +127,7 @@ def plan_dissolve(
     ground,
     *,
     min_distance: float,
-    flight_durations: np.ndarray,
+    flight_durations: np.ndarray | None = None,
     landing_velocity: float,
     max_acceleration_z: float,
     airborne_altitude: float = 0.0,
@@ -116,12 +139,20 @@ def plan_dissolve(
     max_wait: float = 90.0,
     time_limit: float = 60.0,
     first: np.ndarray | None = None,
+    track: tuple[np.ndarray, np.ndarray] | None = None,
+    duration_fn=None,
 ) -> DissolvePlan:
     """Plans the "crumbling" return: drone ``i`` leaves ``start[i]`` on its
     turn (``order``: ``random``, ``top``, ``bottom``, ``outside`` or
     ``front``; about ``interval`` seconds apart), flies straight to
     ``above[i]`` in ``flight_durations[i]`` seconds and descends to
     ``ground[i]`` at once.
+
+    With ``track = (times, frames)`` the drones do not wait still: until it
+    leaves, drone ``i`` is at ``frames[k, i]`` at ``times[k]`` (following an
+    animated model; clamped to the ends of the track), and it leaves from
+    wherever it is then. ``duration_fn(delta)`` then gives the flight time of
+    every move ``delta``.
 
     Drones in the ``first`` mask (for example those already waiting above
     the pad, not in the formation) go before all the others, lowest first.
@@ -137,6 +168,14 @@ def plan_dissolve(
     n = len(a)
     if order not in DISSOLVE_ORDERS:
         raise ValueError(f"unknown order {order!r}; use one of {DISSOLVE_ORDERS}")
+    if track is not None:
+        track = (np.asarray(track[0], dtype=float), np.asarray(track[1], dtype=float))
+        if duration_fn is None:
+            raise ValueError("a track needs duration_fn")
+    if flight_durations is None:
+        if duration_fn is None:
+            raise ValueError("give flight_durations or duration_fn")
+        flight_durations = duration_fn(b - a)
     rng = np.random.default_rng(seed)
     fly = np.ceil(np.asarray(flight_durations, dtype=float) / dt) * dt
     kv, ka = PROFILES["smooth"]
@@ -162,12 +201,21 @@ def plan_dissolve(
     rank[np.argsort(key, kind="stable")] = np.arange(n)
     turn = np.round(rank * interval / dt) * dt
 
-    plan = DissolvePlan(a, b, g, turn.copy(), fly, down, True)
+    plan = DissolvePlan(a.copy(), b, g, turn.copy(), fly, down, True, track=track)
     if n < 2 or min_distance <= 0:
         return plan
 
+    # everything a drone can sweep: its way while waiting and its flight
     step_path = 0.5 * min_distance
-    partners = _partners([_polyline([a[i], b[i], g[i]], step_path) for i in range(n)], min_distance)
+    paths = []
+    for i in range(n):
+        pts = [_polyline([a[i], b[i], g[i]], step_path)]
+        if track is not None:
+            moved = track[1][:, i]
+            pts.append(moved)
+            pts.append(_polyline([moved[-1], b[i]], step_path))
+        paths.append(np.vstack(pts))
+    partners = _partners(paths, min_distance)
     pad = [np.flatnonzero(np.hypot(*(g[:, :2] - g[i, :2]).T) < min_distance) for i in range(n)]
     # a little margin: the checks sample the motion every ``dt`` seconds
     target = min_distance + 0.05
@@ -179,32 +227,45 @@ def plan_dissolve(
     queue = [(float(turn[k]), int(k)) for k in range(n)]
     heapq.heapify(queue)
     departures = plan.departures
+    one = np.zeros(1)
+
+    def leave(k: int, s: float):
+        """Departure point, flight time and the path (from the departure) of
+        drone ``k`` leaving at ``s``."""
+        if track is None:
+            point, flight_k = a[k], fly[k]
+        else:
+            point = _waiting(track, a, np.array([k]), np.array([s]))[0, 0]
+            flight_k = float(np.ceil(duration_fn((b[k] - point)[None])[0] / dt) * dt)
+        rel = np.arange(0.0, flight_k + down[k] + dt, dt)
+        path = _positions(
+            point[None],
+            b[k : k + 1],
+            g[k : k + 1],
+            one,
+            np.array([flight_k]),
+            down[k : k + 1],
+            rel,
+        )[0]
+        return point, flight_k, rel, path
 
     while queue:
         if time.perf_counter() > deadline:
             plan.complete, plan.failure = False, "time limit"
             break
-        first, k = heapq.heappop(queue)
+        first_time, k = heapq.heappop(queue)
         mates = partners[k]
         done = mates[scheduled[mates]]
         waiting = mates[~scheduled[mates]]
         waiting = waiting[waiting != k]
-        flight_len = fly[k] + down[k]
-        rel = np.arange(0.0, flight_len + dt, dt)
-        own_path = _positions(
-            a[k : k + 1],
-            b[k : k + 1],
-            g[k : k + 1],
-            np.zeros(1),
-            fly[k : k + 1],
-            down[k : k + 1],
-            rel,
-        )[0]
-        own_air = own_path[:, 2] - g[k, 2] >= airborne_altitude
+        base = max(first_time, float(turn[k]))
         # drones still in the formation stay there: k should leave after
         # those it would pass (unless they are already waiting for k)
         if len(waiting) and postponed[k] < 40:
-            d = np.linalg.norm(a[waiting, None, :] - own_path[None], axis=2)
+            _, _, rel, own_path = leave(k, base)
+            own_air = own_path[:, 2] - g[k, 2] >= airborne_altitude
+            others = plan.waiting(waiting, base + rel)
+            d = np.linalg.norm(others - own_path[None], axis=2)
             close = np.any((d < min_distance) & own_air[None], axis=1)
             blockers = [int(j) for j in waiting[close] if k not in waits_for.get(int(j), ())]
             if blockers:
@@ -214,8 +275,7 @@ def plan_dissolve(
                 heapq.heappush(queue, (float(turn[k]), k))
                 continue
         found = False
-        touch_near = [departures[j] + fly[j] + down[j] for j in pad[k] if scheduled[j]]
-        base = max(first, float(turn[k]))
+        touch_near = [departures[j] + plan.flight[j] + down[j] for j in pad[k] if scheduled[j]]
         # the turn first, then a little later or earlier, then further away
         offsets = [0.0]
         for m in range(1, int(max_wait / step) + 1):
@@ -224,14 +284,15 @@ def plan_dissolve(
                 offsets.append(-m * step)
         for offset in offsets:
             s = base + offset
-            touch = s + flight_len
+            point, flight_k, rel, own_path = leave(k, s)
+            touch = s + flight_k + down[k]
             if any(abs(touch - tj) < spindown - 1e-9 for tj in touch_near):
                 continue
             ok = True
             if len(done):
+                own_air = own_path[:, 2] - g[k, 2] >= airborne_altitude
                 # k flying against the drones planned so far
-                t = s + rel
-                other = plan.positions(t, done)
+                other = plan.positions(s + rel, done)
                 both = own_air[None] & (other[..., 2] - g[done, 2][:, None] >= airborne_altitude)
                 if np.any(both & (np.linalg.norm(other - own_path[None], axis=2) < target)):
                     ok = False
@@ -239,13 +300,19 @@ def plan_dissolve(
                     # k still in the formation while they fly past it
                     t0 = np.arange(0.0, s, dt)
                     other = plan.positions(t0, done)
+                    mine = plan.waiting(np.array([k]), t0)[0]
                     up = other[..., 2] - g[done, 2][:, None] >= airborne_altitude
-                    if np.any(up & (np.linalg.norm(other - a[k], axis=2) < target)):
+                    if np.any(up & (np.linalg.norm(other - mine[None], axis=2) < target)):
                         ok = False
             if ok:
                 found = True
                 break
-        departures[k] = s if found else base
+        if found:
+            departures[k] = s
+            plan.start[k] = point
+            plan.flight[k] = flight_k
+        else:
+            departures[k] = base
         scheduled[k] = True
         if not found:
             plan.complete = False
