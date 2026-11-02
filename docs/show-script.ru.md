@@ -61,8 +61,8 @@ scenes:
 landing:                   # или false
   velocity: 1.2            # м/с, пиковая скорость снижения
   spindown: 3              # с между посадками соседних дронов
-  target: nearest          # nearest (ближайшая точка) | home (своя точка)
-  staging_spread: 2.0      # растяжка промежуточной сетки перед посадкой (null - выкл.)
+  target: home             # home (своя точка взлёта, обратно тем же путём) | nearest (ближайшая)
+  staging_spread: null     # необязательная растяжка сетки перед посадкой, например 2.0
   color: "#303030"
 
 audio: {file: music.mp3, start: 0.0}

@@ -106,9 +106,9 @@ RU: dict[str, str] = {
     "Vertical wave (rate = amplitude in metres)": "Вертикальная волна (скорость = амплитуда в метрах)",
     # landing
     "Nearest spot": "Ближайшая точка",
-    "Assign landing spots optimally": "Оптимальное назначение точек посадки",
+    "Drones land on the nearest free spots (shorter return)": "Дроны садятся на ближайшие свободные места (возврат короче)",
     "Own spot": "Своя точка",
-    "Every drone returns to its takeoff spot": "Каждый дрон возвращается на свою точку взлёта",
+    "Every drone flies back the way it came to the point it took off from and lands there": "Каждый дрон летит обратно тем же путём к точке, откуда взлетел, и садится на своё место",
     # storyboard entry
     "Name": "Название",
     "Formation": "Фигура",
@@ -143,8 +143,6 @@ RU: dict[str, str] = {
     "Landing speed": "Скорость посадки",
     "Spin-down": "Остановка моторов",
     "Time between touchdowns of neighbours": "Время между посадками соседних дронов",
-    "Return spread": "Растяжка при возврате",
-    "Size of the staging grid before landing, relative to the landing grid (1 = off)": "Размер промежуточной сетки перед посадкой относительно посадочной (1 - выкл.)",
     "Land on": "Посадка на",
     "Max speed XY": "Макс. скорость XY",
     "Max speed Z": "Макс. скорость Z",

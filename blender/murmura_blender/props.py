@@ -82,8 +82,12 @@ MOTIONS = [
 ]
 
 LAND_ON = [
-    ("nearest", "Nearest spot", "Assign landing spots optimally"),
-    ("home", "Own spot", "Every drone returns to its takeoff spot"),
+    (
+        "home",
+        "Own spot",
+        "Every drone flies back the way it came to the point it took off from and lands there",
+    ),
+    ("nearest", "Nearest spot", "Drones land on the nearest free spots (shorter return)"),
 ]
 
 
@@ -190,7 +194,7 @@ class MURMURA_StoryboardEntry(bpy.types.PropertyGroup):
         ),
         default=True,
     )
-    land_on: EnumProperty(name="Land on", items=LAND_ON, default="nearest")
+    land_on: EnumProperty(name="Land on", items=LAND_ON, default="home")
 
     # filled in by Recalculate
     frame_start: IntProperty(default=0)
@@ -294,12 +298,6 @@ class MURMURA_Settings(bpy.types.PropertyGroup):
     landing_velocity: FloatProperty(name="Landing speed", default=1.0, min=0.1, unit="VELOCITY")
     spindown: FloatProperty(
         name="Spin-down", description="Time between touchdowns of neighbours", default=3.0, min=0.0
-    )
-    staging_spread: FloatProperty(
-        name="Return spread",
-        description="Size of the staging grid before landing, relative to the landing grid (1 = off)",
-        default=2.0,
-        min=1.0,
     )
 
     # export

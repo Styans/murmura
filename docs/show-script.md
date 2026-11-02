@@ -61,8 +61,8 @@ scenes:
 landing:                    # or `false`
   velocity: 1.2             # m/s peak descent speed
   spindown: 3               # s between touchdowns of neighbouring drones
-  target: nearest           # nearest | home
-  staging_spread: 2.0       # enlarged staging grid before the final approach (null to disable)
+  target: home              # home (own takeoff point, back the way it came) | nearest
+  staging_spread: null      # optional enlarged staging grid before the final approach, e.g. 2.0
   color: "#303030"
 
 audio: {file: music.mp3, start: 0.0}

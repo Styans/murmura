@@ -60,6 +60,14 @@ same plan backwards: the lowest layer lands first, neighbours touch down
 *Spin-down* seconds apart. A pad that already respects the minimum distance
 takes off all at once.
 
+**Return to the own spot.** With *Land on: Own spot* (the default) every
+drone flies back to the very point where it hovered after takeoff and lands
+where it took off. The return is the flight from the takeoff points into the
+last formation played backwards, so drones retrace their way in the order
+they left. If several formations mixed the drones up so much that the own
+spots cannot be reached safely, they land on the nearest free spots and the
+report says so.
+
 The collapsed *Shape Generator* panel only creates a helper mesh (circle,
 heart, text, SVG...) that you then add with *Formation* like any object.
 On *Murmura LEDs*, *Object colours* use the points' `drone_color` attribute

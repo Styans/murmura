@@ -331,7 +331,6 @@ class MURMURA_PT_safety_more(_Panel, bpy.types.Panel):
         col.separator()
         col.prop(s, "landing_velocity")
         col.prop(s, "spindown")
-        col.prop(s, "staging_spread")
 
 
 class MURMURA_PT_export(_Panel, bpy.types.Panel):

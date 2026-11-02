@@ -218,7 +218,8 @@ def stagger_transition(
         return delays
 
     window = float(np.max(dur))
-    step = step or max(0.2, window / 10.0)
+    # fine steps: coarse ones make long transitions wait in visible batches
+    step = step or float(np.clip(window / 20.0, 0.2, 0.5))
     max_delay = window * 2.0 if max_delay is None else max_delay
     dt = float(np.clip(window / 80.0, 0.04, 0.2))
     times = np.arange(0.0, window + max_delay + dt, dt)
@@ -357,6 +358,18 @@ class MovePlan:
             )
             out += leg[None] * profile_progress(tau, self.profile)[..., None]
         return out
+
+    def reversed(self) -> MovePlan:
+        """The same moves played backwards in time (from the last waypoint to
+        the first); keeps the separation of the original plan."""
+        total = self.total_duration
+        return MovePlan(
+            self.waypoints[:, ::-1].copy(),
+            total - (self.starts + self.durations)[:, ::-1],
+            self.durations[:, ::-1].copy(),
+            {"ease_in": "ease_out", "ease_out": "ease_in"}.get(self.profile, self.profile),
+            self.label,
+        )
 
     def min_separation(self, dt: float = 0.1) -> float:
         """Smallest distance between any two drones during the plan."""

@@ -12,10 +12,20 @@ Engine:
   distance holds at every moment while drones are in the air.
 - `ShowBuilder.takeoff(climb_velocity=...)`; new `planning.takeoff_layers`
   and `planning.plan_waves`.
+- Landing returns every drone to its own takeoff point by default
+  (`land(target="home")`): the return retraces the flight from the takeoff
+  points into the last formation backwards, then the waves land in mirror
+  order. If the own spots cannot be reached safely the drones land on the
+  nearest free spots. The staging grid is now off by default.
+- Staggered transitions use finer delay steps: long transitions no longer
+  wait in visible batches and are much shorter (a 500-drone return went
+  from 103 s to 59 s).
+- `MovePlan.reversed()`.
 
 Blender add-on:
 
 - *In turns* option on takeoff and landing entries.
+- Landing defaults to *Own spot*; the *Return spread* setting was removed.
 - Simpler interface laid out like Skybrush Studio: three sidebar tabs -
   *Murmura* (drones and show), *Murmura LEDs* (lights, painting) and
   *Murmura Export* (safety, validation, export). Rarely used settings moved

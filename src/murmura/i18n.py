@@ -61,6 +61,7 @@ RU: dict[str, str] = {
     "transition": "переход",
     "takeoff in {count} waves, layers {gap:.1f} m apart": "взлёт в {count} волны (по очереди), слои через {gap:.1f} м",
     "landing in {count} waves": "посадка в {count} волны (по очереди)",
+    "return: drones land on the nearest free spots, their own were not safe": "возврат: дроны сядут на ближайшие свободные места - на свои вернуться безопасно не получилось",
     "{label}: requested {requested:.2f}s is too short, using {used:.2f}s": "{label}: запрошенные {requested:.2f} с - слишком мало, используется {used:.2f} с",
     "{label}: {plan} transition keeps {separation:.2f} m separation": "{label}: {plan} переход сохраняет дистанцию {separation:.2f} м",
     "{label}: could only keep {separation:.2f} m between drones (minimum {minimum:g} m)": "{label}: удалось сохранить только {separation:.2f} м между дронами (минимум {minimum:g} м)",

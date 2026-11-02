@@ -165,3 +165,20 @@ def test_plan_waves_keeps_the_gap():
     assert starts[1] < durations[0]
     spaced, _ = plan_waves([7.4, 6.0], gap=1.4, velocity=1.2, max_acceleration=3, min_offset=10)
     assert spaced[1] == 10
+
+
+def test_reversed_plan_plays_backwards():
+    from murmura.planning.transition import MovePlan
+
+    rng = np.random.default_rng(3)
+    a, mid, b = rng.uniform(-10, 10, (3, 5, 3))
+    plan = MovePlan(
+        np.stack([a, mid, b], axis=1),
+        rng.uniform(0, 2, (5, 1)) + np.array([[0.0, 5.0]]),
+        np.full((5, 2), 3.0),
+    )
+    back = plan.reversed()
+    total = plan.total_duration
+    t = np.linspace(0, total, 50)
+    assert back.total_duration <= total + 1e-9  # the idle start is not replayed
+    assert np.allclose(back.positions(t), plan.positions(total - t))

@@ -20,7 +20,7 @@ from .planning import (
     plan_waves,
     takeoff_layers,
 )
-from .planning.transition import plan_safe_moves, synchronised_plan
+from .planning.transition import MovePlan, plan_safe_moves, synchronised_plan
 from .trajectory import Trajectory
 
 __all__ = ("Motion", "ShowBuilder", "make_motion")
@@ -393,20 +393,7 @@ class ShowBuilder:
             )
         return self
 
-    def _move_to(
-        self,
-        targets: np.ndarray,
-        *,
-        duration: float | None = None,
-        profile: str | None = None,
-        stagger: bool | None = None,
-        label: str = "transition",
-    ) -> float:
-        """Moves drone i to ``targets[i]`` along straight lines; returns the
-        duration of the move."""
-        profile = profile or self.profile
-        targets = np.asarray(targets, dtype=float)
-
+    def _duration_fn(self, profile: str):
         m = self.speed_margin
 
         def duration_fn(delta: np.ndarray) -> np.ndarray:
@@ -420,6 +407,27 @@ class ShowBuilder:
                 profile=profile,
             )
 
+        return duration_fn
+
+    def _plan_move(
+        self,
+        targets: np.ndarray,
+        *,
+        duration: float | None = None,
+        profile: str,
+        stagger: bool | None = None,
+        label: str = "transition",
+        mirror: bool = False,
+    ) -> tuple[MovePlan | None, float]:
+        """Plans the move of drone i to ``targets[i]`` without performing it;
+        returns the plan (``None`` if nothing moves) and its separation.
+
+        With ``mirror`` the move is planned as if the drones flew from the
+        targets to their current positions and then played backwards, so a
+        return to the takeoff points retraces the flight out of them. The
+        search for it is kept short, as the caller has a fallback.
+        """
+        duration_fn = self._duration_fn(profile)
         window = float(np.max(duration_fn(targets - self.positions), initial=0.0))
         if duration is not None:
             if duration + 1e-9 < window:
@@ -433,11 +441,12 @@ class ShowBuilder:
                 )
             window = max(window, float(duration))
         if window <= 0:
-            return 0.0
+            return None, float("inf")
+        if not (self.stagger if stagger is None else stagger):
+            return synchronised_plan(self.positions, targets, window, profile), float("inf")
 
-        use_stagger = self.stagger if stagger is None else stagger
-        if use_stagger:
-            plan, separation = plan_safe_moves(
+        if not mirror:
+            return plan_safe_moves(
                 self.positions,
                 targets,
                 min_distance=self.limits.min_distance,
@@ -445,29 +454,41 @@ class ShowBuilder:
                 profile=profile,
                 minimum_window=window,
             )
-            if plan.label != "synchronised":
-                self.log.append(
-                    tr(
-                        "{label}: {plan} transition keeps {separation:.2f} m separation",
-                        label=label,
-                        plan=plan_label(plan.label),
-                        separation=separation,
-                    )
-                )
-            if separation < self.limits.min_distance - 1e-3:
-                self.log.append(
-                    tr("warning")
-                    + ": "
-                    + tr(
-                        "{label}: could only keep {separation:.2f} m between drones (minimum {minimum:g} m)",
-                        label=label,
-                        separation=separation,
-                        minimum=self.limits.min_distance,
-                    )
-                )
-        else:
-            plan = synchronised_plan(self.positions, targets, window, profile)
+        plan, separation = plan_safe_moves(
+            targets,
+            self.positions,
+            min_distance=self.limits.min_distance,
+            duration_fn=lambda delta: duration_fn(-delta),
+            profile=profile,
+            minimum_window=window,
+            time_limit=5.0,
+        )
+        return plan.reversed(), separation
 
+    def _perform(self, plan: MovePlan | None, separation: float, targets, *, label: str) -> float:
+        """Writes a planned move into the trajectories; returns its duration."""
+        if plan is None:
+            return 0.0
+        if plan.label != "synchronised":
+            self.log.append(
+                tr(
+                    "{label}: {plan} transition keeps {separation:.2f} m separation",
+                    label=label,
+                    plan=plan_label(plan.label),
+                    separation=separation,
+                )
+            )
+        if separation < self.limits.min_distance - 1e-3:
+            self.log.append(
+                tr("warning")
+                + ": "
+                + tr(
+                    "{label}: could only keep {separation:.2f} m between drones (minimum {minimum:g} m)",
+                    label=label,
+                    separation=separation,
+                    minimum=self.limits.min_distance,
+                )
+            )
         t0 = self.t
         total = plan.total_duration
         for i, traj in enumerate(self.trajectories):
@@ -478,11 +499,32 @@ class ShowBuilder:
                 if np.allclose(goal, plan.waypoints[i, k], atol=1e-6):
                     continue
                 traj.hold_until(start)
-                traj.smooth_to(end, goal, profile=profile)
+                traj.smooth_to(end, goal, profile=plan.profile)
             traj.hold_until(t0 + total)
-        self.positions = targets.copy()
+        self.positions = np.asarray(targets, dtype=float).copy()
         self.t = t0 + total
         return total
+
+    def _move_to(
+        self,
+        targets: np.ndarray,
+        *,
+        duration: float | None = None,
+        profile: str | None = None,
+        stagger: bool | None = None,
+        label: str = "transition",
+    ) -> float:
+        """Moves drone i to ``targets[i]`` along straight lines; returns the
+        duration of the move."""
+        targets = np.asarray(targets, dtype=float)
+        plan, separation = self._plan_move(
+            targets,
+            duration=duration,
+            profile=profile or self.profile,
+            stagger=stagger,
+            label=label,
+        )
+        return self._perform(plan, separation, targets, label=label)
 
     def transition_to(
         self,
@@ -656,15 +698,19 @@ class ShowBuilder:
         velocity: float = 1.0,
         spindown: float = 3.0,
         altitude: float | None = None,
-        target: str = "nearest",
+        target: str = "home",
         color: Any = (80, 80, 80),
         layered: bool = True,
-        staging_spread: float | None = 2.0,
+        staging_spread: float | None = None,
     ) -> ShowBuilder:
         """Returns every drone above a landing spot and lands the swarm.
 
-        ``target="nearest"`` assigns landing spots (the home grid) optimally,
-        ``target="home"`` sends every drone back to its own takeoff spot.
+        ``target="home"`` (default) sends every drone back to the very point
+        where it hovered after takeoff, retracing the flight out of it: the
+        return is planned like a transition from the takeoff points into the
+        current formation and played backwards. The landing then mirrors the
+        takeoff wave by wave. ``target="nearest"`` assigns landing spots (the
+        home grid) optimally instead.
 
         With ``staging_spread`` the swarm first forms a horizontal copy of the
         landing grid enlarged by that factor at the mean altitude of the
@@ -700,23 +746,42 @@ class ShowBuilder:
             slots = spots.copy()
             slots[:, 2] = spots[:, 2] + lift
 
-        if target == "nearest":
-            mapping = match_points(self.positions, slots)
+        if target not in ("nearest", "home"):
+            raise ValueError("landing target must be 'nearest' or 'home'")
+        home_spots, home_slots, home_lift, home_groups = spots, slots, lift, groups
+
+        def nearest_order() -> np.ndarray:
+            mapping = match_points(self.positions, home_slots)
             order = np.zeros(self.n, dtype=int)
             for slot, drone in enumerate(mapping):
                 order[drone] = slot  # type: ignore[index]
-        elif target == "home":
-            order = np.arange(self.n)
-        else:
-            raise ValueError("landing target must be 'nearest' or 'home'")
-        spots, slots, lift, groups = spots[order], slots[order], lift[order], groups[order]
+            return order
+
+        label = tr("return")
+        profile = self.profile
+        order = np.arange(self.n) if target == "home" else nearest_order()
+        slots = home_slots[order]
+        plan, separation = self._plan_move(
+            slots, profile=profile, label=label, mirror=target == "home" and not staging_spread
+        )
+        if target == "home" and separation < self.limits.min_distance - 1e-3:
+            # the own takeoff points cannot be reached safely from here
+            fallback = nearest_order()
+            other_slots = home_slots[fallback]
+            other, other_separation = self._plan_move(other_slots, profile=profile, label=label)
+            if other_separation > separation:
+                self.log.append(
+                    tr("return: drones land on the nearest free spots, their own were not safe")
+                )
+                order, slots, plan, separation = fallback, other_slots, other, other_separation
+        spots, lift, groups = home_spots[order], home_lift[order], home_groups[order]
         above = spots.copy()
         above[:, 2] = spots[:, 2] + lift
 
         t0 = self.t
         self.cues.append(Cue(t0, tr("Landing")))
         self._anchor_colors()
-        self._move_to(slots, label=tr("return"))
+        self._perform(plan, separation, slots, label=label)
         if staging_spread:
             self._move_to(above, label=tr("approach"), stagger=False)
         self._set_colors(self.t, np.array(parse_color(color), dtype=float), fade=True)

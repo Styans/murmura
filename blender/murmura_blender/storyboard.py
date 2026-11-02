@@ -61,9 +61,8 @@ def _land(settings, builder, entry) -> None:
     builder.land(
         velocity=settings.landing_velocity,
         spindown=settings.spindown,
-        target=entry.land_on if entry else "nearest",
+        target=entry.land_on if entry else "home",
         layered=entry.layered if entry else True,
-        staging_spread=settings.staging_spread if settings.staging_spread > 1.0 else None,
     )
 
 

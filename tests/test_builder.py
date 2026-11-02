@@ -137,3 +137,23 @@ def test_takeoff_is_simultaneous_when_the_pad_is_spacious():
     times = np.linspace(t0, t1, 500)
     first = [times[np.argmax(d.trajectory.position_at(times)[:, 2] > 0.01)] for d in show.drones]
     assert np.ptp(first) < 1e-6
+
+
+def test_drones_return_to_their_own_takeoff_points():
+    limits = SafetyLimits(min_distance=2)
+    b = ShowBuilder(36, limits=limits, grid_spacing=1.5)
+    b.takeoff(altitude=6, climb_velocity=1.2)
+    hover = b.positions.copy()
+    b.scene("Wall", circle(36, radius=14, center=(0, 30, 25)), hold=2)
+    b.land()
+    show = b.build()
+    assert validate_show(show).passed
+    land0, _ = show.segments["landing"]
+    end = np.array([d.trajectory.last_position for d in show.drones])
+    assert np.allclose(end, b.home)  # every drone on its own spot
+    # on the way down every drone passes the very point it hovered at after takeoff
+    times = np.linspace(land0, show.end_time, 4000)
+    for d, point in zip(show.drones, hover):
+        track = d.trajectory.position_at(times)
+        assert np.min(np.linalg.norm(track - point, axis=1)) < 0.02
+    assert not any("nearest" in note for note in b.log)
