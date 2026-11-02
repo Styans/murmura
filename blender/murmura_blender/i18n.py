@@ -36,7 +36,6 @@ RU: dict[str, str] = {
     "No drones yet": "Дронов пока нет",
     "Clear Animation": "Очистить анимацию",
     "Height": "Высота",
-    "Any mesh can be a formation: one vertex per drone.": "Фигурой может быть любой меш: одна вершина на дрона.",
     "CSV": "CSV",
     "Scene {index}": "Сцена {index}",
     # shapes
@@ -113,7 +112,7 @@ RU: dict[str, str] = {
     # storyboard entry
     "Name": "Название",
     "Formation": "Фигура",
-    "Hold": "Удержание",
+    "Hold": "Время в фигуре",
     "Time spent in the formation": "Время в фигуре",
     "Fixed start": "Фикс. старт",
     "Start the transition at a fixed time": "Начать переход в заданное время",
@@ -298,8 +297,6 @@ RU: dict[str, str] = {
     "Paint the selected drones in the formation shown on the current frame (or the selected entry)": "Покрасить выделенных дронов в фигуре на текущем кадре (или в выбранной сцене)",
     "Clear Painting": "Сбросить покраску",
     "Remove the painting of the selected storyboard entry": "Убрать покраску выбранной сцены",
-    "Formation: select vertices (Tab) or objects, then press +.": "Фигура: выделите вершины (Tab) или объекты и нажмите «Фигура».",
-    "Speeds and spin-down: Safety tab.": "Скорости и остановка моторов - во вкладке «Безопасность».",
     "Painted drone sets: {count}": "Покрашенных наборов дронов: {count}",
     "Select some vertices first": "Сначала выделите вершины",
     "Select some drones first": "Сначала выделите дронов",
@@ -309,14 +306,24 @@ RU: dict[str, str] = {
     "Formation '{name}': {points} points, {drones} drones": "Фигура «{name}»: точек {points}, дронов {drones}",
     "an even subset of points will be used": "будет взята равномерная выборка точек",
     "{count} drones will wait with lights off": "{count} дронов подождут с выключенным светом",
-    "1. Select an object, several objects,": "1. Выделите объект, несколько объектов,",
-    "   a collection or vertices (Tab).": "   коллекцию или вершины (Tab).",
-    "2. Press the button - drones will fly to its points.": "2. Нажмите кнопку - дроны полетят в её точки.",
-    "Add Selected as Formation": "Добавить выделенное как фигуру",
-    "Order, timing and lights: Storyboard.": "Порядок, время и свет - во вкладке «Сценарий».",
-    "Generate Shape Mesh": "Сгенерировать меш-фигуру",
     "Creates a new mesh; then add it as a formation.": "Создаёт новый меш; потом добавьте его как фигуру.",
     "Create Shape Mesh": "Создать меш-фигуру",
+    # sidebar tabs and panels
+    "Murmura LEDs": "Murmura Свет",
+    "Murmura Export": "Murmura Экспорт",
+    "Show": "Шоу",
+    "Drone Groups": "Группы дронов",
+    "More Options": "Дополнительно",
+    "Shape Generator": "Генератор фигур",
+    "Paint Drones": "Покраска дронов",
+    "All Limits": "Все ограничения",
+    "Points": "Точки",
+    "Select an object with points": "Выделите объект с точками",
+    "and press Formation.": "и нажмите «Фигура».",
+    "Select a formation in the storyboard.": "Выберите фигуру в списке на вкладке Murmura.",
+    "Select drones, pick a colour, press Paint.": "Выделите дронов, выберите цвет, нажмите «Покрасить выделенных».",
+    "Show is safe": "Шоу безопасно",
+    "Problems found: see Murmura Export": "Есть проблемы - см. вкладку «Murmura Экспорт»",
     "Create a new mesh with one point per drone (then add it as a formation)": "Создать новый меш с точкой на каждого дрона (потом добавьте его как фигуру)",
     "{count} drones painted in '{name}' - press Recalculate": "Покрашено дронов: {count} в «{name}» - нажмите «Пересчитать шоу»",
     "'{name}': no points found": "«{name}»: точки не найдены",
@@ -400,11 +407,14 @@ def localize(cls) -> None:
             "bl_description": cls.__dict__.get("bl_description")
             or (cls.__doc__ or "").strip()
             or None,
+            "bl_category": getattr(cls, "bl_category", None),
             "annotations": dict(cls.__dict__.get("__annotations__", {})),
         }
         cls._murmura_original = original
     if original["bl_label"]:
         cls.bl_label = tr(original["bl_label"])
+    if original["bl_category"]:
+        cls.bl_category = tr(original["bl_category"])
     if original["bl_description"] and issubclass(cls, bpy.types.Operator):
         cls.bl_description = tr(original["bl_description"])
     annotations = {}

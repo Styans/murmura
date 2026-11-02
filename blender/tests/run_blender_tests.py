@@ -86,7 +86,7 @@ class LayoutProbe:
 
 
 def check_languages(addon, ctx):
-    from murmura_blender import i18n, ops, ops_story, props
+    from murmura_blender import i18n, ops, ops_story, props, ui
 
     s = ctx.scene.murmura
     names_before = [e.name for e in s.storyboard]
@@ -104,7 +104,8 @@ def check_languages(addon, ctx):
     entry_rna = props.MURMURA_StoryboardEntry.bl_rna
     check(ops_story.MURMURA_OT_recalculate.bl_label == "Пересчитать шоу", "Russian operator labels")
     check(ops.MURMURA_OT_add_formation.bl_label == "Создать меш-фигуру", "shape generator label")
-    check(entry_rna.properties["hold"].name == "Удержание", "Russian property names")
+    check(entry_rna.properties["hold"].name == "Время в фигуре", "Russian property names")
+    check(ui.MURMURA_PT_lights.bl_category == "Murmura Свет", "Russian tab names")
     check(
         entry_rna.properties["effect"].enum_items["rainbow"].name == "Радуга", "Russian enum items"
     )
@@ -135,27 +136,43 @@ def check_panels(ctx):
     s = ctx.scene.murmura
     if not len(s.storyboard):
         s.storyboard.add()
+    panels = [cls for cls in ui.CLASSES if issubclass(cls, bpy.types.Panel)]
     drawn: list[str] = []
+    s.storyboard_index = 0
+    entry = s.storyboard[0]
+    kind = entry.kind
     for shape, *_ in props.SHAPES:
         s.shape = shape
         for effect, *_ in props.EFFECTS:
-            s.storyboard[0].effect = effect
+            entry.effect = effect
             for motion in ("none", "rotate"):
-                s.storyboard[0].motion = motion
-                for cls in ui.CLASSES:
-                    if issubclass(cls, bpy.types.Panel):
+                entry.motion = motion
+                for entry.kind in ("TAKEOFF", "FORMATION", "LAND"):
+                    for cls in panels:
                         cls.draw(SimpleNamespace(layout=LayoutProbe(drawn)), ctx)
+    entry.kind = kind
     check(len(drawn) > 100, f"all panels draw for every shape / effect ({len(set(drawn))} widgets)")
-    formations: list[str] = []
-    ui.MURMURA_PT_formations.draw(SimpleNamespace(layout=LayoutProbe(formations)), ctx)
+
+    tabs = {cls.bl_category for cls in panels}
+    check(len(tabs) == 3, f"three sidebar tabs like Skybrush: {sorted(tabs)}")
+    show: list[str] = []
+    ui.MURMURA_PT_show.draw(SimpleNamespace(layout=LayoutProbe(show)), ctx)
     check(
-        formations == ["murmura.add_selection"],
-        "Formations panel: one button, formation from the selection",
+        {"murmura.add_takeoff", "murmura.add_selection", "murmura.add_landing"} <= set(show)
+        and "murmura.recalculate" in show,
+        "Show panel: takeoff / formation / landing buttons and Recalculate",
     )
-    check(
-        ui.MURMURA_PT_shape_generator.bl_parent_id == "MURMURA_PT_formations",
-        "shape generator is a sub-panel",
-    )
+    main_props = []
+    for cls in panels:
+        if (
+            cls.bl_category == ui.MURMURA_PT_show.bl_category
+            and not getattr(cls, "bl_parent_id", "")
+            and "DEFAULT_CLOSED" not in getattr(cls, "bl_options", set())
+        ):
+            names: list[str] = []
+            cls.draw(SimpleNamespace(layout=LayoutProbe(names)), ctx)
+            main_props += [n for n in names if "." not in n]
+    check(len(main_props) <= 8, f"main tab shows only the essentials ({len(main_props)} fields)")
 
 
 def main():

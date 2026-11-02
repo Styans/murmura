@@ -4,12 +4,17 @@
 
 Blender add-on:
 
-- The *Formations* panel now turns the selection into a formation: one or
-  several objects, vertices in Edit Mode, or the collection active in the
-  Outliner. It reports the number of points and drones.
-- The shape generator moved to a collapsed *Generate Shape Mesh* sub-panel;
-  its button is now *Create Shape Mesh*.
-- The installed version is shown at the top of the *Swarm* panel.
+- Simpler interface laid out like Skybrush Studio: three sidebar tabs -
+  *Murmura* (drones and show), *Murmura LEDs* (lights, painting) and
+  *Murmura Export* (safety, validation, export). Rarely used settings moved
+  to collapsed sub-panels; a status line under *Recalculate Show* says
+  whether the show is safe; storyboard times are shown as minutes:seconds.
+- *Formation* turns the selection into a formation: one or several objects,
+  vertices in Edit Mode, or the collection active in the Outliner. It
+  reports the number of points and drones.
+- The shape generator moved to a collapsed *Shape Generator* panel; its
+  button is now *Create Shape Mesh*.
+- The language selector moved to the add-on preferences.
 
 ## 0.1.0 - 2026-10-30
 

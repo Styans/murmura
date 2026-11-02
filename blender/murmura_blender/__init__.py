@@ -1,17 +1,15 @@
 """Murmura for Blender: drone show choreography and .skyc export.
 
-Sidebar tab "Murmura" in the 3D viewport:
+Three sidebar tabs in the 3D viewport, like Skybrush Studio:
 
-* Swarm - create a takeoff grid of drones lit by their object colour; groups
-* Formations - turn the selected objects, vertices or collection into a
-  formation (a shape mesh generator is in a sub-panel)
-* Storyboard - order formations, hold times, light effects and motions, then
-  recalculate the show: takeoff, collision-aware transitions and landing are
-  baked as keyframes onto the drones
-* Safety, Export - validate the animation and export / import ``.skyc`` files
+* Murmura - create drones, turn the selected objects, vertices or collection
+  into formations, order them on the storyboard and recalculate the show:
+  takeoff, collision-aware transitions and landing are baked as keyframes
+* Murmura LEDs - lights of the selected formation, painting drones
+* Murmura Export - safety limits, validation, ``.skyc`` export and import
 
 The interface is available in English and Russian (see the add-on
-preferences or the language selector in the Swarm panel).
+preferences).
 """
 
 bl_info = {
